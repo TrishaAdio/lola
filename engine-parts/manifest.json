@@ -1,0 +1,67 @@
+{
+  "engineBuild": "19",
+  "chunkBytes": 41943040,
+  "generatedBy": "scripts/chunk-engine.mjs",
+  "builds": [
+    {
+      "base": "stockfish-19",
+      "js": {
+        "name": "stockfish-19.js",
+        "bytes": 32718,
+        "sha256": "227b9317cb8fc347da722b3f6694c5f57eafe17842a8a1afbfe08c3aeeae5671"
+      },
+      "wasm": {
+        "name": "stockfish-19.wasm",
+        "bytes": 99065439,
+        "sha256": "e0ef90031a310479e5b0c3692a9839118ed785535c306252e68ed3300a45b02d",
+        "parts": [
+          {
+            "name": "stockfish-19.wasm.part-000",
+            "bytes": 41943040,
+            "sha256": "6ae0752581006020fddfca3da3e55cd639207a57627bba2a2bd41f1a0ea700bb"
+          },
+          {
+            "name": "stockfish-19.wasm.part-001",
+            "bytes": 41943040,
+            "sha256": "d3ae311fe23a8d6f3ad3ae37990e70ea0446e8a22886ae8846c023d25d99a467"
+          },
+          {
+            "name": "stockfish-19.wasm.part-002",
+            "bytes": 15179359,
+            "sha256": "c0bbd271d98886ac1dc31c6934f77b88ae949784262d452209457745cdf61d40"
+          }
+        ]
+      }
+    },
+    {
+      "base": "stockfish-19-single",
+      "js": {
+        "name": "stockfish-19-single.js",
+        "bytes": 21315,
+        "sha256": "72772f8bdd7353e4e24245d946bb831f56bcccf02fa16a779c1b92a6c00e5cc2"
+      },
+      "wasm": {
+        "name": "stockfish-19-single.wasm",
+        "bytes": 99102793,
+        "sha256": "8725c26572762617fd96b2ea83ff130e6640b85815890d682bf8c49db0820721",
+        "parts": [
+          {
+            "name": "stockfish-19-single.wasm.part-000",
+            "bytes": 41943040,
+            "sha256": "19e3e60eadf0cc57555caf939dc15931d0f918495b8250025378459061fb3d5e"
+          },
+          {
+            "name": "stockfish-19-single.wasm.part-001",
+            "bytes": 41943040,
+            "sha256": "e95036853133168cbd49e061c265e4b97c37a4fb3a43b657567311a870b6a2b0"
+          },
+          {
+            "name": "stockfish-19-single.wasm.part-002",
+            "bytes": 15216713,
+            "sha256": "4585aa86036f383875ec9e90d6fd1bd5a8475ba75eceda714f95f7f4a6fa004a"
+          }
+        ]
+      }
+    }
+  ]
+}

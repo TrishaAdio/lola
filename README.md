@@ -27,15 +27,39 @@ npm run verify  # unit tests + position validation + browser smoke test
 | Lite NNUE, multi-threaded | ~1.6 MB | yes | **Default when available.** |
 | Lite NNUE, single-threaded | ~1.8 MB | no | Runs anywhere. |
 
-The full builds embed the large NNUE network and are ~94 MB each, so they are **not**
-synced by default. Enable them with:
+All four builds ship in this repo — no extra download. The full builds are only assembled
+into `public/engine/` on request, so normal installs and builds stay small:
 
 ```bash
-npm run engine:full
+npm run engine:full     # assemble the full NNUE builds (local, no network)
 ```
 
 The app probes which builds are actually present (and whether the page is cross-origin
 isolated) and only offers tiers it can really run.
+
+### How the 94 MiB builds are stored
+
+Each full build is ~94.5 MiB. That fits under GitHub's 100 MiB hard limit, but GitHub warns
+above 50 MiB and a future NNUE net could cross the limit outright. So the full builds are
+committed as **40 MiB chunks** in `engine-parts/`, alongside a `manifest.json` recording the
+sha256 and byte length of every chunk and of each complete file.
+
+`npm run engine:full` concatenates the chunks, verifies each chunk's hash and then the
+assembled file's hash, and writes a single ordinary `.wasm` into `public/engine/`. The
+reassembled files are byte-identical to the originals shipped by the `stockfish` package.
+
+Reassembly happens at **install time, not in the browser** — the app loads one plain
+`.wasm` file and knows nothing about chunking, so there is no runtime complexity or new
+failure mode.
+
+```bash
+npm run engine:verify   # re-hash the assembled builds against the manifest
+npm run engine:chunk    # maintainers only: re-split after an engine upgrade
+```
+
+`engine-parts/` is ~189 MiB total, which is the cost of having the strongest engine
+available straight from a clone. If you only ever need the lite engine, nothing forces you
+to assemble the full one.
 
 **Important:** every tier plays at `Skill Level 20` with `UCI_LimitStrength false`. The
 difference between tiers is network size and threading — never an artificial handicap.
@@ -100,7 +124,8 @@ src/chess/     chess.js helpers: positions, threat analysis, eval conversion,
                post-game analysis, PV-to-English gloss
 src/hooks/     useGame - the engine/turn loop and all game state
 src/components/ setup screen, board, eval bar, commentary, history, summary
-scripts/       engine sync, position validation, browser smoke test
+scripts/       engine sync/chunking, position validation, browser smoke test
+engine-parts/  the full NNUE engine, committed as 40 MiB chunks + sha256 manifest
 ```
 
 ## Verification
@@ -114,8 +139,10 @@ scripts/       engine sync, position validation, browser smoke test
 - `npm run smoke` — builds, serves `dist/` in-process with the isolation headers, and
   drives a real headless browser: boots the engine, seeds the eval bar, plays a typed
   algebraic move and a click move, checks the engine's reply is legal via chess.js,
-  verifies underpromotion (`bxc8=N`), the insufficient-material draw, and that the engine
-  finds a forced mate (`Ra8#`).
+  verifies underpromotion (`bxc8=N`), the insufficient-material draw, the board flip, and
+  that the engine finds a forced mate (`Ra8#`). When the full NNUE build has been
+  assembled, it also boots that 94 MiB engine and checks it plays a legal move — which is
+  what proves the chunk reassembly produced a working binary.
 
 ## Notes on accuracy scoring
 

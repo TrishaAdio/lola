@@ -48,6 +48,13 @@ const server = createServer((req, res) => {
   res.setHeader("Cross-Origin-Embedder-Policy", "require-corp");
   res.setHeader("Content-Type", MIME[path.extname(filePath)] ?? "application/octet-stream");
   res.setHeader("Content-Length", statSync(filePath).size);
+
+  // The app probes engine availability with HEAD; answer it without streaming the body,
+  // which matters when the asset is 94 MiB.
+  if (req.method === "HEAD") {
+    res.end();
+    return;
+  }
   createReadStream(filePath).pipe(res);
 });
 
@@ -504,6 +511,80 @@ try {
   }
 
   await page.screenshot({ path: `${SHOTS}/06-engine-mate.png`, fullPage: true });
+
+  // --- scenario 4: the reassembled full NNUE build must actually run -------------------
+  // Only when the chunked build has been assembled (npm run engine:full), so the default
+  // smoke run stays fast and doesn't depend on a 94 MiB asset.
+  if (existsSync(path.join(DIST, "engine", "stockfish-19.wasm"))) {
+    console.log("\ninfo  scenario 4: full NNUE build reassembled from engine-parts/");
+    await page.click(".btn--ghost:has-text('Choose another position')");
+    await page.waitForSelector(".setup__header h1", { timeout: 20000 });
+
+    const fullTier = page.locator(".tier:has-text('Full NNUE · multi-threaded')");
+    // Availability is probed asynchronously on mount, so wait for the result.
+    const tierEnabled = await fullTier
+      .waitFor({ state: "attached", timeout: 10000 })
+      .then(() =>
+        page.waitForFunction(
+          () => {
+            const btn = [...document.querySelectorAll(".tier")].find((b) =>
+              b.textContent?.includes("Full NNUE · multi-threaded"),
+            );
+            return !!btn && !btn.disabled;
+          },
+          null,
+          { timeout: 30000 },
+        ),
+      )
+      .then(() => true)
+      .catch(() => false);
+
+    if (!tierEnabled) {
+      fail("full NNUE tier stayed disabled even though the wasm is present");
+    } else {
+      pass("full NNUE tier detected as available");
+      await fullTier.click();
+      await page.click(".tab:has-text('Standard')");
+      await page.click(".btn--primary");
+
+      // 94 MiB to fetch and compile; allow real time for it.
+      const t0 = Date.now();
+      await waitForUserTurn(page, 300000);
+      pass(`full NNUE engine booted in ${((Date.now() - t0) / 1000).toFixed(1)}s`);
+
+      await page.fill(".moveinput input", "e4");
+      await page.click(".moveinput button");
+      await page.waitForFunction(
+        () =>
+          [...document.querySelectorAll(".history__move")].filter((c) => c.textContent.trim())
+            .length >= 2,
+        null,
+        { timeout: 300000 },
+      );
+
+      const fullMoves = (await page.locator(".history__move").allTextContents())
+        .map((t) => t.trim())
+        .filter(Boolean);
+      const verifyFull = new Chess();
+      verifyFull.move("e4");
+      if (!verifyFull.moves().includes(fullMoves[1])) {
+        fail(`full engine replied with an illegal move: "${fullMoves[1]}"`);
+      } else {
+        pass(`full NNUE engine played a legal reply to e4: ${fullMoves[1]}`);
+      }
+
+      const depthText = await page.textContent(".commentary");
+      if (!/depth\s+\d+/.test(depthText ?? "")) {
+        fail("full engine produced no search output");
+      } else {
+        pass("full NNUE engine produced real search output");
+      }
+
+      await page.screenshot({ path: `${SHOTS}/08-full-nnue.png`, fullPage: true });
+    }
+  } else {
+    console.log("\ninfo  scenario 4 skipped: full NNUE build not assembled");
+  }
 
   // --- tofu check: no missing-glyph boxes anywhere in the rendered UI -----------------
   const tofu = await page.evaluate(() => {

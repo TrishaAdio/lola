@@ -7,6 +7,8 @@
     "postinstall": "node scripts/sync-engine.mjs",
     "engine:sync": "node scripts/sync-engine.mjs",
     "engine:full": "node scripts/sync-engine.mjs --full",
+    "engine:chunk": "node scripts/chunk-engine.mjs",
+    "engine:verify": "node scripts/sync-engine.mjs --full --verify",
     "dev": "npm run engine:sync && vite",
     "prebuild": "node scripts/sync-engine.mjs",
     "build": "tsc -b && vite build",

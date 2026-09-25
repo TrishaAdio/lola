@@ -14,6 +14,7 @@ import { MoveInput } from "./MoveInput";
 import { PromotionDialog } from "./PromotionDialog";
 import { GameSummaryPanel } from "./GameSummaryPanel";
 import { ENGINE_TIERS } from "../engine/tiers";
+import { boardTheme } from "./boardTheme";
 
 interface Props {
   setup: GameSetup;
@@ -245,8 +246,7 @@ export function PlayScreen({ setup, onExit, onRematch }: Props) {
                   onSquareClick,
                   squareStyles,
                   animationDurationInMs: 180,
-                  darkSquareStyle: { backgroundColor: "#2d3440" },
-                  lightSquareStyle: { backgroundColor: "#8b93a1" },
+                  ...boardTheme,
                   showNotation: true,
                 }}
               />

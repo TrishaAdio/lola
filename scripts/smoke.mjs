@@ -295,6 +295,36 @@ try {
   if (after.pressed !== "true") fail("flip button does not expose aria-pressed state");
   else pass("flip button exposes its pressed state");
 
+  // Every coordinate label must contrast with its square, on both square colours.
+  const notation = await page.evaluate(() => {
+    const bad = [];
+    let labels = 0;
+    for (const el of document.querySelectorAll("[data-square]")) {
+      for (const span of el.querySelectorAll("span")) {
+        const text = span.textContent?.trim();
+        if (!text) continue;
+        labels++;
+        const fg = getComputedStyle(span).color;
+        const bg = getComputedStyle(el).backgroundColor;
+        // Illegible if the label colour matches its own square colour.
+        if (fg === bg) bad.push(`${el.getAttribute("data-square")}:"${text}" ${fg} on ${bg}`);
+        // Or if it is still the library's default brown, which we overrode.
+        if (fg === "rgb(181, 136, 99)") {
+          bad.push(`${el.getAttribute("data-square")}:"${text}" still default brown`);
+        }
+      }
+    }
+    return { labels, bad };
+  });
+
+  if (notation.labels === 0) {
+    fail("no coordinate labels rendered");
+  } else if (notation.bad.length) {
+    fail(`${notation.bad.length} illegible coordinate labels: ${notation.bad.slice(0, 4).join("; ")}`);
+  } else {
+    pass(`all ${notation.labels} coordinate labels contrast with their squares`);
+  }
+
   // The checkerboard must be correct regardless of orientation: a1/h8 dark, h1/a8 light.
   const checker = await page.evaluate(() => {
     const DARK = "rgb(45, 52, 64)";

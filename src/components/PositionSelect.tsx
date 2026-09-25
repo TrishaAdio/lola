@@ -11,6 +11,7 @@ import type { PositionCategory, StartingPosition } from "../chess/positions";
 import { ENGINE_TIERS, detectBestTier, isTierAvailable, supportsThreads } from "../engine/tiers";
 import type { EngineTierId } from "../engine/types";
 import type { GameSetup } from "../hooks/useGame";
+import { boardTheme } from "./boardTheme";
 
 type Tab = "standard" | "library" | "fen" | "chaos";
 type StrengthMode = "no-mercy" | "practice";
@@ -250,8 +251,7 @@ export function PositionSelect({ onStart }: Props) {
                   allowDragging: false,
                   showNotation: true,
                   animationDurationInMs: 0,
-                  darkSquareStyle: { backgroundColor: "#2d3440" },
-                  lightSquareStyle: { backgroundColor: "#8b93a1" },
+                  ...boardTheme,
                 }}
               />
             ) : (

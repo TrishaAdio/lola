@@ -1,0 +1,40 @@
+{
+  "name": "ruthless-chess",
+  "private": true,
+  "version": "0.0.0",
+  "type": "module",
+  "scripts": {
+    "postinstall": "node scripts/sync-engine.mjs",
+    "engine:sync": "node scripts/sync-engine.mjs",
+    "engine:full": "node scripts/sync-engine.mjs --full",
+    "dev": "npm run engine:sync && vite",
+    "prebuild": "node scripts/sync-engine.mjs",
+    "build": "tsc -b && vite build",
+    "typecheck": "tsc -b",
+    "lint": "oxlint",
+    "preview": "vite preview",
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "verify:positions": "node scripts/verify-positions.mjs",
+    "smoke": "npm run build && node scripts/smoke.mjs",
+    "verify": "npm run test && npm run verify:positions && npm run smoke"
+  },
+  "dependencies": {
+    "chess.js": "^1.4.0",
+    "react": "^19.2.8",
+    "react-chessboard": "^5.12.1",
+    "react-dom": "^19.2.8",
+    "stockfish": "^19.0.0"
+  },
+  "devDependencies": {
+    "@types/node": "^24.13.3",
+    "@types/react": "^19.2.18",
+    "@types/react-dom": "^19.2.7",
+    "@vitejs/plugin-react": "^6.1.1",
+    "oxlint": "^1.81.0",
+    "playwright": "^1.63.0",
+    "typescript": "~6.0.2",
+    "vite": "^8.3.0",
+    "vitest": "^5.0.2"
+  }
+}

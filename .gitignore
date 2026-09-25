@@ -1,0 +1,11 @@
+node_modules
+dist
+dist-ssr
+*.local
+.DS_Store
+.vite
+
+# Stockfish engine binaries are copied out of node_modules by scripts/sync-engine.mjs
+# (run automatically via postinstall / prebuild). The full NNUE builds are ~94 MB each,
+# so none of them are committed.
+public/engine/

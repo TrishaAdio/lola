@@ -242,9 +242,82 @@ try {
 
   await page.screenshot({ path: `${SHOTS}/02-after-engine-reply.png`, fullPage: true });
 
-  // --- a second exchange, this time by clicking squares -------------------------------
+  // --- board flip ---------------------------------------------------------------------
   await waitForUserTurn(page, 60000);
 
+  // Orientation is observable from DOM order: White at the bottom renders a8 first.
+  const viewState = () =>
+    page.evaluate(() => ({
+      firstSquare: document.querySelector("[data-square]")?.getAttribute("data-square"),
+      firstTray: document.querySelector(".tray__label")?.textContent?.trim(),
+      evalFill: parseFloat(document.querySelector(".evalbar__fill")?.style.height ?? "0"),
+      pressed: document
+        .querySelector(".play__actions .btn")
+        ?.getAttribute("aria-pressed"),
+    }));
+
+  const before = await viewState();
+  if (before.firstSquare !== "a8") fail(`expected White at the bottom, first square ${before.firstSquare}`);
+  else pass(`board starts oriented for White (first square ${before.firstSquare})`);
+
+  await page.click(".play__actions .btn:has-text('Flip board')");
+  await page.waitForFunction(
+    () => document.querySelector("[data-square]")?.getAttribute("data-square") === "h1",
+    null,
+    { timeout: 10000 },
+  );
+  const after = await viewState();
+
+  if (after.firstSquare !== "h1") fail(`board did not flip, first square ${after.firstSquare}`);
+  else pass("flip button reversed the board orientation");
+
+  if (after.firstTray === before.firstTray) {
+    fail(`captured-pieces trays did not follow the flip (still "${after.firstTray}")`);
+  } else {
+    pass(`trays followed the flip: "${before.firstTray}" -> "${after.firstTray}"`);
+  }
+
+  // The eval bar fills from the near side, so the two shares must be complementary.
+  const sum = before.evalFill + after.evalFill;
+  if (Math.abs(sum - 100) > 1.5) {
+    fail(`eval bar did not follow the flip: ${before.evalFill}% + ${after.evalFill}% = ${sum}%`);
+  } else {
+    pass(`eval bar followed the flip (${before.evalFill}% -> ${after.evalFill}%)`);
+  }
+
+  if (after.pressed !== "true") fail("flip button does not expose aria-pressed state");
+  else pass("flip button exposes its pressed state");
+
+  // The checkerboard must be correct regardless of orientation: a1/h8 dark, h1/a8 light.
+  const checker = await page.evaluate(() => {
+    const DARK = "rgb(45, 52, 64)";
+    const LIGHT = "rgb(139, 147, 161)";
+    const wrong = [];
+    let counted = 0;
+    for (const el of document.querySelectorAll("[data-square]")) {
+      const sq = el.getAttribute("data-square");
+      if (!/^[a-h][1-8]$/.test(sq)) continue;
+      const file = sq.charCodeAt(0) - 97;
+      const rank = Number(sq[1]) - 1;
+      const expected = (file + rank) % 2 === 0 ? DARK : LIGHT;
+      const actual = getComputedStyle(el).backgroundColor;
+      counted++;
+      if (actual !== expected) wrong.push(`${sq}: got ${actual}, want ${expected}`);
+    }
+    return { counted, wrong };
+  });
+
+  if (checker.counted !== 64) {
+    fail(`expected 64 squares, inspected ${checker.counted}`);
+  } else if (checker.wrong.length) {
+    fail(`checkerboard is wrong on ${checker.wrong.length} squares: ${checker.wrong.slice(0, 6).join("; ")}`);
+  } else {
+    pass("all 64 squares keep the correct light/dark colour while flipped");
+  }
+
+  await page.screenshot({ path: `${SHOTS}/07-flipped.png`, fullPage: true });
+
+  // --- a second exchange while flipped, to prove the flip is purely visual ------------
   // Click-to-move: g1 then f3 (Nf3 is legal in essentially every reply to e4).
   await selectSquare(page, "g1");
   await page.click('[data-square="f3"]');
@@ -262,8 +335,22 @@ try {
     .then(() => true)
     .catch(() => false);
 
-  if (played) pass("click-to-move worked");
-  else fail("click-to-move did not register a third move");
+  if (played) pass("click-to-move still works while the board is flipped");
+  else fail("click-to-move did not register a third move while flipped");
+
+  // Flipping back must restore the original view.
+  await page.click(".play__actions .btn:has-text('Flip board')");
+  await page.waitForFunction(
+    () => document.querySelector("[data-square]")?.getAttribute("data-square") === "a8",
+    null,
+    { timeout: 10000 },
+  );
+  const restored = await viewState();
+  if (restored.firstTray !== before.firstTray || restored.pressed !== "false") {
+    fail(`flipping back did not fully restore the view: ${JSON.stringify(restored)}`);
+  } else {
+    pass("flipping back restored the original orientation and trays");
+  }
 
   await page.waitForFunction(
     () => {

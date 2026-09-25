@@ -43,8 +43,13 @@ export function PlayScreen({ setup, onExit, onRematch }: Props) {
     setSelectedSquare(square);
   }, []);
 
+  /** Purely visual: which colour sits at the bottom of the board. */
+  const [flipped, setFlipped] = useState(false);
+
   const engineTier = ENGINE_TIERS[setup.engineConfig.tier];
   const userIsWhite = setup.userColor === "w";
+  /** Colour shown on the near side. Never used for move logic, only for the view. */
+  const viewColor = flipped ? opposite(setup.userColor) : setup.userColor;
   const thinking = game.phase === "engine-thinking";
   const myTurn = game.phase === "user-turn";
 
@@ -144,6 +149,23 @@ export function PlayScreen({ setup, onExit, onRematch }: Props) {
   const engineMaterial = materialValue(game.capturedByEngine);
   const userMaterial = materialValue(game.capturedByUser);
 
+  const engineTray = (
+    <CapturedTray
+      captured={game.capturedByEngine}
+      piecesColor={setup.userColor}
+      label="Engine has taken"
+      advantage={engineMaterial - userMaterial}
+    />
+  );
+  const userTray = (
+    <CapturedTray
+      captured={game.capturedByUser}
+      piecesColor={opposite(setup.userColor)}
+      label="You have taken"
+      advantage={userMaterial - engineMaterial}
+    />
+  );
+
   const statusText = (() => {
     if (game.engineStatus.state === "error") return game.engineStatus.error ?? "Engine error";
     if (game.engineStatus.state === "loading") {
@@ -172,14 +194,25 @@ export function PlayScreen({ setup, onExit, onRematch }: Props) {
           <span>{engineTier.label}</span>
           {setup.ruthless && <span className="badge">no mercy</span>}
         </div>
-        <button
-          type="button"
-          className="btn btn--quiet"
-          onClick={game.resign}
-          disabled={game.phase === "over"}
-        >
-          Resign
-        </button>
+        <div className="play__actions">
+          <button
+            type="button"
+            className="btn btn--quiet"
+            onClick={() => setFlipped((f) => !f)}
+            aria-pressed={flipped}
+            title={`Flip the board — currently viewing from ${viewColor === "w" ? "White" : "Black"}`}
+          >
+            Flip board
+          </button>
+          <button
+            type="button"
+            className="btn btn--quiet"
+            onClick={game.resign}
+            disabled={game.phase === "over"}
+          >
+            Resign
+          </button>
+        </div>
       </header>
 
       <div className={`status ${thinking ? "status--thinking" : ""}`}>
@@ -197,24 +230,16 @@ export function PlayScreen({ setup, onExit, onRematch }: Props) {
 
       <div className="play__grid">
         <div className="play__boardcol">
-          <CapturedTray
-            captured={game.capturedByEngine}
-            piecesColor={setup.userColor}
-            label="Engine has taken"
-            advantage={engineMaterial - userMaterial}
-          />
+          {/* Each tray sits beside the player it belongs to, so they follow the flip. */}
+          {flipped ? userTray : engineTray}
 
           <div className="boardwrap">
-            <EvalBar
-              assessment={game.assessment}
-              orientation={setup.userColor}
-              thinking={thinking}
-            />
+            <EvalBar assessment={game.assessment} orientation={viewColor} thinking={thinking} />
             <div className="board">
               <Chessboard
                 options={{
                   position: game.fen,
-                  boardOrientation: userIsWhite ? "white" : "black",
+                  boardOrientation: viewColor === "w" ? "white" : "black",
                   allowDragging: myTurn,
                   onPieceDrop,
                   onSquareClick,
@@ -228,12 +253,7 @@ export function PlayScreen({ setup, onExit, onRematch }: Props) {
             </div>
           </div>
 
-          <CapturedTray
-            captured={game.capturedByUser}
-            piecesColor={opposite(setup.userColor)}
-            label="You have taken"
-            advantage={userMaterial - engineMaterial}
-          />
+          {flipped ? engineTray : userTray}
 
           <MoveInput disabled={!myTurn} onSubmit={game.playSan} />
         </div>

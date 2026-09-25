@@ -131,6 +131,13 @@ code,
   border-color: var(--line);
 }
 
+/* Toggle buttons show their on-state, e.g. the board flip. */
+.btn--quiet[aria-pressed="true"] {
+  color: var(--text);
+  border-color: var(--line);
+  background: var(--bg-sunken);
+}
+
 .note {
   color: var(--text-dim);
   font-size: 12.5px;
@@ -443,6 +450,13 @@ input[type="range"] {
   gap: 12px;
   padding-bottom: 12px;
   border-bottom: 1px solid var(--line-soft);
+}
+
+.play__actions {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  flex: none;
 }
 
 .play__meta {

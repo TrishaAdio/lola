@@ -15,6 +15,13 @@ import { PromotionDialog } from "./PromotionDialog";
 import { GameSummaryPanel } from "./GameSummaryPanel";
 import { ENGINE_TIERS } from "../engine/tiers";
 import { boardTheme } from "./boardTheme";
+import { formatClock } from "../hooks/useClock";
+import type { Color } from "chess.js";
+
+const CLAIM_TEXT = {
+  "threefold-repetition": "threefold repetition",
+  "fifty-move-rule": "the 50-move rule",
+} as const;
 
 interface Props {
   setup: GameSetup;
@@ -150,21 +157,41 @@ export function PlayScreen({ setup, onExit, onRematch }: Props) {
   const engineMaterial = materialValue(game.capturedByEngine);
   const userMaterial = materialValue(game.capturedByUser);
 
+  const clockFor = (color: Color) =>
+    game.clock.enabled ? (
+      <span
+        className={[
+          "clock",
+          game.clock.display.running === color ? "clock--running" : "",
+          game.clock.display[color] < 20_000 ? "clock--low" : "",
+        ].join(" ")}
+        data-testid={`clock-${color}`}
+      >
+        {formatClock(game.clock.display[color])}
+      </span>
+    ) : null;
+
   const engineTray = (
-    <CapturedTray
-      captured={game.capturedByEngine}
-      piecesColor={setup.userColor}
-      label="Engine has taken"
-      advantage={engineMaterial - userMaterial}
-    />
+    <div className="player">
+      <CapturedTray
+        captured={game.capturedByEngine}
+        piecesColor={setup.userColor}
+        label="Engine has taken"
+        advantage={engineMaterial - userMaterial}
+      />
+      {clockFor(game.engineColor)}
+    </div>
   );
   const userTray = (
-    <CapturedTray
-      captured={game.capturedByUser}
-      piecesColor={opposite(setup.userColor)}
-      label="You have taken"
-      advantage={userMaterial - engineMaterial}
-    />
+    <div className="player">
+      <CapturedTray
+        captured={game.capturedByUser}
+        piecesColor={opposite(setup.userColor)}
+        label="You have taken"
+        advantage={userMaterial - engineMaterial}
+      />
+      {clockFor(setup.userColor)}
+    </div>
   );
 
   const statusText = (() => {
@@ -176,6 +203,7 @@ export function PlayScreen({ setup, onExit, onRematch }: Props) {
         : `Loading ${engineTier.label} (${engineTier.sizeLabel})…`;
     }
     if (game.phase === "over") return game.gameOver?.detail ?? "Game over";
+    if (game.phase === "claim-pending") return "Your move allows a draw claim.";
     if (thinking) return `Engine thinking — depth ${game.searchDepth || "…"}`;
     if (myTurn) return `Your move (${userIsWhite ? "White" : "Black"})`;
     // Engine is ready but the turn driver hasn't handed control over yet. Saying
@@ -193,7 +221,10 @@ export function PlayScreen({ setup, onExit, onRematch }: Props) {
           <span className="play__position">{setup.positionName}</span>
           <span className="play__sep" aria-hidden="true" />
           <span>{engineTier.label}</span>
-          {setup.ruthless && <span className="badge">no mercy</span>}
+          {setup.engineConfig.skillLevel === 20 && !setup.engineConfig.limitStrength && (
+            <span className="badge">no mercy</span>
+          )}
+          {setup.strategic && <span className="badge badge--quiet">strategic</span>}
         </div>
         <div className="play__actions">
           <button
@@ -205,6 +236,28 @@ export function PlayScreen({ setup, onExit, onRematch }: Props) {
           >
             Flip board
           </button>
+          <button
+            type="button"
+            className="btn btn--quiet"
+            onClick={() => game.setAuraEnabled(!game.auraEnabled)}
+            aria-pressed={game.auraEnabled}
+            title="Tactics Aura commentary"
+          >
+            Aura {game.auraEnabled ? "on" : "off"}
+          </button>
+          <button
+            type="button"
+            className="btn btn--quiet"
+            onClick={game.offerDraw}
+            disabled={!game.canOfferDraw}
+          >
+            Offer draw
+          </button>
+          {game.canClaim && game.phase === "user-turn" && (
+            <button type="button" className="btn btn--claim" onClick={game.claimDraw}>
+              Claim draw
+            </button>
+          )}
           <button
             type="button"
             className="btn btn--quiet"
@@ -226,6 +279,42 @@ export function PlayScreen({ setup, onExit, onRematch }: Props) {
               style={{ width: `${Math.round(game.engineStatus.progress.percent * 100)}%` }}
             />
           </span>
+        )}
+      </div>
+
+      {game.phase === "claim-pending" && (
+        <div className="claim" role="alert">
+          <span>
+            This position allows a draw by {CLAIM_TEXT[game.rules.claimable[0]]}.
+          </span>
+          <button type="button" className="btn btn--claim" onClick={game.claimDraw}>
+            Claim draw
+          </button>
+          <button type="button" className="btn btn--ghost" onClick={game.playOn}>
+            Play on
+          </button>
+        </div>
+      )}
+
+      {game.phase === "user-turn" && game.canClaim && (
+        <p className="notice" data-testid="claimable">
+          Draw claimable: {game.rules.claimable.map((k) => CLAIM_TEXT[k]).join(", ")}.
+        </p>
+      )}
+
+      {game.drawOffer && game.phase !== "over" && (
+        <p className="notice" data-testid="draw-offer">
+          {game.drawOffer.status === "open"
+            ? "Draw offered. The engine answers on its move."
+            : "The engine declined your draw offer and played on."}
+        </p>
+      )}
+
+      <div className="aura-slot" aria-live="polite">
+        {game.auraMessage && (
+          <p key={game.auraMessage.id} className="aura" data-trigger={game.auraMessage.trigger}>
+            {game.auraMessage.text}
+          </p>
         )}
       </div>
 

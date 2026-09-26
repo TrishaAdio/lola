@@ -19,7 +19,8 @@
     "test:watch": "vitest",
     "verify:positions": "node scripts/verify-positions.mjs",
     "smoke": "npm run build && node scripts/smoke.mjs",
-    "verify": "npm run test && npm run verify:positions && npm run smoke"
+    "verify": "npm run test && npm run verify:positions && npm run smoke && node scripts/e2e-rules.mjs",
+    "e2e": "npm run build && node scripts/e2e-rules.mjs"
   },
   "dependencies": {
     "chess.js": "^1.4.0",

@@ -1111,3 +1111,162 @@ input[type="range"] {
     grid-template-columns: 1fr;
   }
 }
+
+/* ---------- rules, clocks, aura ---------- */
+
+.player {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.player .tray {
+  flex: 1;
+}
+
+.clock {
+  font-family: var(--mono);
+  font-size: 17px;
+  font-variant-numeric: tabular-nums;
+  padding: 4px 10px;
+  border-radius: 6px;
+  background: var(--bg-sunken);
+  border: 1px solid var(--line);
+  color: var(--text-dim);
+  min-width: 74px;
+  text-align: center;
+}
+
+.clock--running {
+  color: #fff;
+  border-color: #3b4453;
+  background: var(--bg-raised);
+}
+
+.clock--low.clock--running {
+  color: #fff;
+  background: var(--accent);
+  border-color: var(--accent);
+}
+
+.btn--claim {
+  background: var(--good);
+  border-color: var(--good);
+  color: #0e1116;
+  font-weight: 600;
+  padding: 6px 12px;
+}
+
+.btn--claim:hover:not(:disabled) {
+  background: #5cc486;
+  border-color: #5cc486;
+  color: #0e1116;
+}
+
+.claim {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-wrap: wrap;
+  margin: -4px 0 14px;
+  padding: 10px 14px;
+  border: 1px solid rgba(79, 180, 119, 0.45);
+  background: rgba(79, 180, 119, 0.08);
+  border-radius: 8px;
+  font-size: 13px;
+}
+
+.claim span {
+  flex: 1;
+}
+
+.notice {
+  margin: -4px 0 12px;
+  font-size: 12.5px;
+  color: var(--text-dim);
+}
+
+.aura-slot {
+  min-height: 26px;
+  margin: -4px 0 8px;
+}
+
+.aura {
+  margin: 0;
+  font-size: 14px;
+  letter-spacing: 0.01em;
+  color: #e7b3b3;
+  animation: aura-in 0.5s ease-out, aura-out 1s ease-in 6s forwards;
+}
+
+@keyframes aura-in {
+  from {
+    opacity: 0;
+    transform: translateY(-3px);
+  }
+}
+
+@keyframes aura-out {
+  to {
+    opacity: 0;
+  }
+}
+
+.diverged {
+  margin: 8px 0 0;
+  font-size: 12px;
+  color: var(--warn);
+}
+
+.plan {
+  display: grid;
+  grid-template-columns: auto 1fr;
+  gap: 4px 10px;
+  margin: 12px 0 0;
+  font-size: 12.5px;
+}
+
+.plan dt {
+  color: var(--text-faint);
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  font-size: 10.5px;
+  padding-top: 2px;
+}
+
+.plan dd {
+  margin: 0;
+}
+
+.plan__why {
+  display: block;
+  color: var(--text-faint);
+  font-size: 11.5px;
+}
+
+.cands__note {
+  color: var(--text-faint) !important;
+  font-size: 10.5px;
+}
+
+.badge--quiet {
+  color: var(--text-dim);
+  background: transparent;
+  border-color: var(--line);
+}
+
+.settings {
+  margin-top: 18px;
+  padding-top: 4px;
+  border-top: 1px solid var(--line-soft);
+}
+
+.select {
+  background: var(--bg-sunken);
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  color: var(--text);
+  padding: 8px 12px;
+  font: inherit;
+  font-size: 13px;
+}

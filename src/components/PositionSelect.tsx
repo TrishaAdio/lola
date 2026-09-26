@@ -11,6 +11,9 @@ import type { PositionCategory, StartingPosition } from "../chess/positions";
 import { ENGINE_TIERS, detectBestTier, isTierAvailable, supportsThreads } from "../engine/tiers";
 import type { EngineTierId } from "../engine/types";
 import type { GameSetup } from "../hooks/useGame";
+import { storedAuraPreference } from "../hooks/useGame";
+import { TIME_CONTROLS } from "../hooks/useClock";
+import type { DrawClaimMode } from "../chess/rules";
 import { boardTheme } from "./boardTheme";
 
 type Tab = "standard" | "library" | "fen" | "chaos";
@@ -56,7 +59,11 @@ export function PositionSelect({ onStart }: Props) {
   const [skillLevel, setSkillLevel] = useState(20);
   const [capElo, setCapElo] = useState(false);
   const [uciElo, setUciElo] = useState(1800);
-  const [ruthless, setRuthless] = useState(true);
+  const [strategic, setStrategic] = useState(true);
+  const [drawClaims, setDrawClaims] = useState<DrawClaimMode>("claim");
+  const [timeControlId, setTimeControlId] = useState("off");
+  const [aura, setAura] = useState(storedAuraPreference);
+  const [engineMayResign, setEngineMayResign] = useState(false);
 
   // Probe which engine builds are actually present, then pick the best default.
   useEffect(() => {
@@ -114,13 +121,17 @@ export function PositionSelect({ onStart }: Props) {
       history: activePosition.history,
       userColor,
       positionName: activePosition.name,
-      ruthless: mode === "no-mercy" ? ruthless : false,
+      strategic: mode === "no-mercy" ? strategic : false,
+      drawClaims,
+      aura,
+      engineMayResign,
+      timeControl: TIME_CONTROLS.find((t) => t.id === timeControlId) ?? null,
       engineConfig: {
         tier,
         threads: Math.min(navigator.hardwareConcurrency || 4, 8),
         hashMb: ENGINE_TIERS[tier].fullNet ? 256 : 128,
-        // MultiPV > 1 is what makes the pressure tie-break possible.
-        multiPv: mode === "no-mercy" && ruthless ? 3 : 1,
+        // The strategic layer re-ranks Stockfish's top 5 lines.
+        multiPv: mode === "no-mercy" && strategic ? 5 : 1,
         limitStrength: mode === "practice" && capElo,
         skillLevel: mode === "practice" ? skillLevel : 20,
         uciElo,
@@ -222,6 +233,12 @@ export function PositionSelect({ onStart }: Props) {
               {fenInput.trim() && fenCheck && (
                 <p className={fenCheck.ok ? "note note--ok" : "note note--bad"}>
                   {fenCheck.ok ? `Valid. ${fenCheck.turn === "w" ? "White" : "Black"} to move.` : fenCheck.error}
+                </p>
+              )}
+              {fenCheck?.ok && fenCheck.removedCastling && (
+                <p className="note" data-testid="castling-removed">
+                  Castling rights {fenCheck.removedCastling.join("")} removed: king or rook not on its
+                  starting square.
                 </p>
               )}
             </div>
@@ -378,12 +395,12 @@ export function PositionSelect({ onStart }: Props) {
               <label className="check">
                 <input
                   type="checkbox"
-                  checked={ruthless}
-                  onChange={(e) => setRuthless(e.target.checked)}
+                  checked={strategic}
+                  onChange={(e) => setStrategic(e.target.checked)}
                 />
                 <span>
-                  Kill-instinct tie-break — among moves Stockfish rates as equal, prefer the most
-                  forcing one and refuse repetition draws. Uses MultiPV 3.
+                  Strategic layer. Stockfish's top 5 lines are re-ranked by king safety, activity,
+                  pawn structure, plan and prophylaxis. Tactics stay Stockfish's.
                 </span>
               </label>
               <p className="note">
@@ -432,6 +449,64 @@ export function PositionSelect({ onStart }: Props) {
               </p>
             </>
           )}
+
+          <div className="settings">
+            <div className="field">
+              <span className="field__label">Repetition and 50-move draws</span>
+              <div className="segmented">
+                {(
+                  [
+                    ["claim", "Claimable"],
+                    ["automatic", "Automatic"],
+                  ] as const
+                ).map(([m, label]) => (
+                  <button
+                    key={m}
+                    type="button"
+                    className={`segmented__item ${drawClaims === m ? "segmented__item--active" : ""}`}
+                    onClick={() => setDrawClaims(m)}
+                  >
+                    {label}
+                  </button>
+                ))}
+              </div>
+              <p className="note">
+                {drawClaims === "claim"
+                  ? "FIDE over-the-board: you claim them. Fivefold and 75 moves end the game on their own."
+                  : "Chess.com online: the game ends the moment they occur."}
+              </p>
+            </div>
+
+            <div className="field">
+              <label htmlFor="clock">Clock</label>
+              <select
+                id="clock"
+                className="select"
+                value={timeControlId}
+                onChange={(e) => setTimeControlId(e.target.value)}
+              >
+                <option value="off">Off</option>
+                {TIME_CONTROLS.map((t) => (
+                  <option key={t.id} value={t.id}>
+                    {t.label}
+                  </option>
+                ))}
+              </select>
+            </div>
+
+            <label className="check">
+              <input type="checkbox" checked={aura} onChange={(e) => setAura(e.target.checked)} />
+              <span>Tactics Aura</span>
+            </label>
+            <label className="check">
+              <input
+                type="checkbox"
+                checked={engineMayResign}
+                onChange={(e) => setEngineMayResign(e.target.checked)}
+              />
+              <span>Engine may resign lost endgames</span>
+            </label>
+          </div>
 
           <button type="button" className="btn btn--primary" disabled={!activePosition} onClick={start}>
             {activePosition ? `Play ${engineName.fullNet ? "full" : "lite"} Stockfish` : "Pick a position first"}

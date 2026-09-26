@@ -497,7 +497,7 @@ try {
 
   // K+N vs K is a dead position; the app must call it as insufficient material.
   const drawDetail = (await page.textContent(".summary__detail"))?.trim();
-  if (!/insufficient material/i.test(drawDetail ?? "")) {
+  if (!/insufficient (mating )?material/i.test(drawDetail ?? "")) {
     fail(`expected an insufficient-material draw, got "${drawDetail}"`);
   } else {
     pass("K+N vs K correctly ruled a draw by insufficient material");

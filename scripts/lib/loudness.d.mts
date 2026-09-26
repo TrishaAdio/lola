@@ -1,0 +1,10 @@
+export declare const SAMPLE_RATE: number;
+export declare function kWeight(samples: ArrayLike<number>): Float64Array;
+export declare function momentaryMaxLufs(samples: ArrayLike<number>, sampleRate?: number): number;
+export declare function samplePeakDb(samples: ArrayLike<number>): number;
+export declare function powerSpectrum(samples: ArrayLike<number>, opts?: { start?: number; size?: number }): Float64Array;
+export declare function dominantFrequency(samples: ArrayLike<number>, sampleRate?: number, minHz?: number): number;
+export declare function attackCentroid(samples: ArrayLike<number>, sampleRate?: number, ms?: number): number;
+export declare function encodeWav(samples: ArrayLike<number>, sampleRate?: number): Uint8Array;
+export declare function decodeWav(buf: Uint8Array): { sampleRate: number; samples: Float64Array };
+export declare function bandEnergyFraction(samples: ArrayLike<number>, loHz?: number, sampleRate?: number): number;

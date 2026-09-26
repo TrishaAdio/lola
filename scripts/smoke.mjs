@@ -89,14 +89,7 @@ async function waitForUserTurn(page, timeout = 180000) {
 async function selectSquare(page, square) {
   await page.click(`[data-square="${square}"]`);
   try {
-    await page.waitForFunction(
-      (sq) => {
-        const inner = document.querySelector(`[data-square="${sq}"] div`);
-        return !!inner && (inner.getAttribute("style") ?? "").includes("rgba(255, 214, 102");
-      },
-      square,
-      { timeout: 10000 },
-    );
+    await page.waitForSelector(`[data-sq="${square}"] .sq-layer--selected`, { timeout: 10000 });
   } catch (err) {
     const diag = await page.evaluate((sq) => {
       const el = document.querySelector(`[data-square="${sq}"]`);
@@ -259,7 +252,7 @@ try {
       firstTray: document.querySelector(".tray__label")?.textContent?.trim(),
       evalFill: parseFloat(document.querySelector(".evalbar__fill")?.style.height ?? "0"),
       pressed: document
-        .querySelector(".play__actions .btn")
+        .querySelector("[aria-label='Flip board']")
         ?.getAttribute("aria-pressed"),
     }));
 
@@ -267,7 +260,7 @@ try {
   if (before.firstSquare !== "a8") fail(`expected White at the bottom, first square ${before.firstSquare}`);
   else pass(`board starts oriented for White (first square ${before.firstSquare})`);
 
-  await page.click(".play__actions .btn:has-text('Flip board')");
+  await page.click("[aria-label='Flip board']");
   await page.waitForFunction(
     () => document.querySelector("[data-square]")?.getAttribute("data-square") === "h1",
     null,
@@ -309,7 +302,7 @@ try {
         // Illegible if the label colour matches its own square colour.
         if (fg === bg) bad.push(`${el.getAttribute("data-square")}:"${text}" ${fg} on ${bg}`);
         // Or if it is still the library's default brown, which we overrode.
-        if (fg === "rgb(181, 136, 99)") {
+        if (fg === "rgb(181, 136, 99)" || fg === "rgb(240, 217, 181)") {
           bad.push(`${el.getAttribute("data-square")}:"${text}" still default brown`);
         }
       }
@@ -327,8 +320,14 @@ try {
 
   // The checkerboard must be correct regardless of orientation: a1/h8 dark, h1/a8 light.
   const checker = await page.evaluate(() => {
-    const DARK = "rgb(45, 52, 64)";
-    const LIGHT = "rgb(139, 147, 161)";
+    // Resolve the active theme's square colours to computed rgb() strings.
+    const probe = document.createElement("div");
+    document.body.appendChild(probe);
+    probe.style.backgroundColor = "var(--sq-dark)";
+    const DARK = getComputedStyle(probe).backgroundColor;
+    probe.style.backgroundColor = "var(--sq-light)";
+    const LIGHT = getComputedStyle(probe).backgroundColor;
+    probe.remove();
     const wrong = [];
     let counted = 0;
     for (const el of document.querySelectorAll("[data-square]")) {
@@ -376,7 +375,7 @@ try {
   else fail("click-to-move did not register a third move while flipped");
 
   // Flipping back must restore the original view.
-  await page.click(".play__actions .btn:has-text('Flip board')");
+  await page.click("[aria-label='Flip board']");
   await page.waitForFunction(
     () => document.querySelector("[data-square]")?.getAttribute("data-square") === "a8",
     null,
@@ -471,10 +470,10 @@ try {
     .waitForFunction(
       () => {
         const at = (sq) => {
-          const p = document.querySelector(`[data-square="${sq}"] svg path`);
-          return p ? getComputedStyle(p).fill : null;
+          // The piece layer, not the fading capture ghost beneath it.
+          return document.querySelector(`[data-sq="${sq}"] .sq-piece svg[data-piece-code]`)?.getAttribute("data-piece-code") ?? null;
         };
-        return at("c8") === "rgb(255, 255, 255)" && at("b7") === null;
+        return at("c8") === "wN" && at("b7") === null;
       },
       null,
       { timeout: 10000 },
@@ -487,17 +486,26 @@ try {
   } else {
     const promoted = await page.evaluate(() => {
       const at = (sq) => {
-        const p = document.querySelector(`[data-square="${sq}"] svg path`);
-        return p ? getComputedStyle(p).fill : null;
+        return document.querySelector(`[data-sq="${sq}"] .sq-piece svg[data-piece-code]`)?.getAttribute("data-piece-code") ?? null;
       };
       return { c8: at("c8"), b7: at("b7") };
     });
     fail(`board never settled on the promoted position: ${JSON.stringify(promoted)}`);
   }
 
+  // The summary must wait: the board stays up with a result strip first.
+  await page.waitForSelector("[data-testid=review-strip]", { timeout: 20000 });
+  if ((await page.locator(".modal .summary__head").count()) === 0) {
+    pass("game over shows the review strip, not the summary modal");
+  } else {
+    fail("summary modal opened immediately at game over");
+  }
+  await page.click("[data-testid=review-strip] .btn--review");
+  await page.waitForSelector(".modal .summary__head", { timeout: 5000 });
+
   // K+N vs K is a dead position; the app must call it as insufficient material.
   const drawDetail = (await page.textContent(".summary__detail"))?.trim();
-  if (!/insufficient material/i.test(drawDetail ?? "")) {
+  if (!/insufficient (mating )?material/i.test(drawDetail ?? "")) {
     fail(`expected an insufficient-material draw, got "${drawDetail}"`);
   } else {
     pass("K+N vs K correctly ruled a draw by insufficient material");
@@ -533,6 +541,11 @@ try {
   if (mateMove !== "Ra8#") fail(`engine should have played Ra8#, played "${mateMove}"`);
   else pass("engine found and played the forced mate Ra8#");
 
+  if ((await page.locator(".king-glow--mate").count()) === 1) pass("mated king carries the mate glow");
+  else fail("no mate glow on the mated king");
+  await page.waitForSelector("[data-testid=review-strip]", { timeout: 20000 });
+  await page.click("[data-testid=review-strip] .btn--review");
+  await page.waitForSelector(".modal .summary__head", { timeout: 5000 });
   const mateDetail = (await page.textContent(".summary__detail"))?.trim();
   if (!/checkmate/i.test(mateDetail ?? "") || !/white wins/i.test(mateDetail ?? "")) {
     fail(`expected a checkmate win for White, got "${mateDetail}"`);

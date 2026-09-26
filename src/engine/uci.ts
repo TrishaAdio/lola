@@ -91,6 +91,8 @@ export class UciEngine {
   private searchChain: Promise<unknown> = Promise.resolve();
   private searching = false;
   private disposed = false;
+  /** MultiPV as configured, restored after any per-search override. */
+  private multiPv = 1;
 
   /** Raw engine output, newest last. Useful for debugging and the commentary panel. */
   readonly log: string[] = [];
@@ -189,7 +191,8 @@ export class UciEngine {
       await this.setOption("Threads", Math.max(1, cfg.threads));
     }
     await this.setOption("Hash", Math.max(16, cfg.hashMb));
-    await this.setOption("MultiPV", Math.max(1, cfg.multiPv));
+    this.multiPv = Math.max(1, cfg.multiPv);
+    await this.setOption("MultiPV", this.multiPv);
     await this.setOption("UCI_ShowWDL", true);
 
     // Full strength must explicitly disable both weakening mechanisms.
@@ -214,6 +217,7 @@ export class UciEngine {
     limits: SearchLimits,
     onInfo?: (info: EngineInfo) => void,
     signal?: AbortSignal,
+    options: { multiPv?: number } = {},
   ): Promise<SearchResult> {
     const run = async (): Promise<SearchResult> => {
       if (!this.isReady) throw new Error("Engine is not running");
@@ -242,6 +246,11 @@ export class UciEngine {
         depthMap.set(info.multipv, info);
         onInfo?.(info);
       });
+
+      // Option changes are only legal between searches. Inside this serialised run no
+      // other search can be in flight, so a per-search MultiPV override is safe here.
+      const overrideMultiPv = options.multiPv !== undefined && options.multiPv !== this.multiPv;
+      if (overrideMultiPv) this.post(`setoption name MultiPV value ${options.multiPv}`);
 
       try {
         const done = this.waitFor((l) => l.startsWith("bestmove"));
@@ -276,6 +285,7 @@ export class UciEngine {
       } finally {
         collector();
         signal?.removeEventListener("abort", onAbort);
+        if (overrideMultiPv && this.worker) this.post(`setoption name MultiPV value ${this.multiPv}`);
         this.searching = false;
       }
     };

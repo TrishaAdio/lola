@@ -1,5 +1,7 @@
 import { Chess, DEFAULT_POSITION } from "chess.js";
 import type { Color, PieceSymbol } from "chess.js";
+import { sanitizeCastlingRights } from "./moves";
+import { evaluateRules } from "./rules";
 
 export type PositionCategory = "opening" | "endgame" | "puzzle";
 
@@ -239,23 +241,37 @@ export interface FenValidation {
   error?: string;
   fen?: string;
   turn?: Color;
+  /** Castling rights the FEN claimed but the board could not support. */
+  removedCastling?: string[];
 }
 
 /** Validates a pasted FEN and reports a usable error message. */
 export function validateFen(input: string): FenValidation {
-  const fen = input.trim();
-  if (!fen) return { ok: false, error: "Paste a FEN string." };
+  const raw = input.trim();
+  if (!raw) return { ok: false, error: "Paste a FEN string." };
   try {
+    const { fen, removed } = sanitizeCastlingRights(raw);
     const chess = new Chess(fen);
-    if (chess.isGameOver()) {
-      const why = chess.isCheckmate()
-        ? "already checkmate"
-        : chess.isStalemate()
-          ? "already stalemate"
-          : "already a draw";
-      return { ok: false, error: `That position is ${why}.` };
+
+    // The side that just moved can never still be in check; Stockfish rejects this.
+    const waiting: Color = chess.turn() === "w" ? "b" : "w";
+    const waitingKing = chess.findPiece({ type: "k", color: waiting })[0];
+    if (waitingKing && chess.isAttacked(waitingKing, chess.turn())) {
+      return { ok: false, error: "Illegal position: the side not to move is in check." };
     }
-    return { ok: true, fen: chess.fen(), turn: chess.turn() };
+
+    // Only positions that are already *over* are rejected. A position where a draw is
+    // merely claimable (e.g. halfmove clock >= 100) is still playable.
+    const rules = evaluateRules(chess, chess.fen(), "claim");
+    if (rules.terminal) {
+      return { ok: false, error: `That position is already over: ${rules.terminal.detail}` };
+    }
+    return {
+      ok: true,
+      fen: chess.fen(),
+      turn: chess.turn(),
+      removedCastling: removed.length ? removed : undefined,
+    };
   } catch (err) {
     return { ok: false, error: err instanceof Error ? err.message : "Invalid FEN." };
   }
@@ -347,7 +363,8 @@ export function randomLegalPosition(attempts = 500): StartingPosition {
       const waitingKing = chess.findPiece({ type: "k", color: waiting })[0];
       // The side that just "moved" cannot still be in check.
       if (waitingKing && chess.isAttacked(waitingKing, turn)) continue;
-      if (chess.isGameOver()) continue;
+      // Use the Chess.com rules, so a K+N+N v K deal is rejected like any other dead draw.
+      if (evaluateRules(chess, chess.fen(), "claim").terminal) continue;
       if (chess.moves().length === 0) continue;
 
       return {

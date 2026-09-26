@@ -36,6 +36,18 @@ describe("aura triggers fire only on real conditions", () => {
     expect(evaluateAura(calm({ mateIn: 0, winAfterEngine: 100 }), initialAuraState(), first).message?.trigger).not.toBe(
       "mate-net",
     );
+  });
+
+  it("gives the mating move its own closing line, never 'running out of moves'", () => {
+    const r = evaluateAura(calm({ mateIn: 0, humanReplies: 0, winAfterEngine: 100 }), initialAuraState(), first);
+    expect(r.message?.trigger).toBe("mate-delivered");
+  });
+
+  it("constriction needs at least one legal reply left", () => {
+    const stalemated = evaluateAura(calm({ humanReplies: 0, winAfterEngine: 90 }), initialAuraState(), first);
+    expect(stalemated.message?.trigger).not.toBe("constriction");
+    const squeezed = evaluateAura(calm({ humanReplies: 2, winAfterEngine: 90 }), initialAuraState(), first);
+    expect(squeezed.message?.trigger).toBe("constriction");
     // A mate that is far away is not a net yet.
     expect(evaluateAura(calm({ mateIn: 14, winAfterEngine: 100 }), initialAuraState(), first).message?.trigger).not.toBe(
       "mate-net",

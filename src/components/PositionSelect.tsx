@@ -1,5 +1,4 @@
 import { useEffect, useMemo, useState } from "react";
-import { Chessboard } from "react-chessboard";
 import type { Color } from "chess.js";
 import {
   LIBRARY_POSITIONS,
@@ -11,10 +10,10 @@ import type { PositionCategory, StartingPosition } from "../chess/positions";
 import { ENGINE_TIERS, detectBestTier, isTierAvailable, supportsThreads } from "../engine/tiers";
 import type { EngineTierId } from "../engine/types";
 import type { GameSetup } from "../hooks/useGame";
-import { storedAuraPreference } from "../hooks/useGame";
 import { TIME_CONTROLS } from "../hooks/useClock";
 import type { DrawClaimMode } from "../chess/rules";
-import { boardTheme } from "./boardTheme";
+import { Board } from "./Board";
+import { PrefsControls } from "./SettingsMenu";
 
 type Tab = "standard" | "library" | "fen" | "chaos";
 type StrengthMode = "no-mercy" | "practice";
@@ -62,7 +61,6 @@ export function PositionSelect({ onStart }: Props) {
   const [strategic, setStrategic] = useState(true);
   const [drawClaims, setDrawClaims] = useState<DrawClaimMode>("claim");
   const [timeControlId, setTimeControlId] = useState("off");
-  const [aura, setAura] = useState(storedAuraPreference);
   const [engineMayResign, setEngineMayResign] = useState(false);
 
   // Probe which engine builds are actually present, then pick the best default.
@@ -123,7 +121,6 @@ export function PositionSelect({ onStart }: Props) {
       positionName: activePosition.name,
       strategic: mode === "no-mercy" ? strategic : false,
       drawClaims,
-      aura,
       engineMayResign,
       timeControl: TIME_CONTROLS.find((t) => t.id === timeControlId) ?? null,
       engineConfig: {
@@ -261,16 +258,7 @@ export function PositionSelect({ onStart }: Props) {
           <h2 className="panel__title">Preview</h2>
           <div className="preview">
             {activePosition ? (
-              <Chessboard
-                options={{
-                  position: activePosition.fen,
-                  boardOrientation: userColor === "w" ? "white" : "black",
-                  allowDragging: false,
-                  showNotation: true,
-                  animationDurationInMs: 0,
-                  ...boardTheme,
-                }}
-              />
+              <Board id="preview" fen={activePosition.fen} orientation={userColor} />
             ) : (
               <div className="preview__empty">Select a position to preview it.</div>
             )}
@@ -495,10 +483,6 @@ export function PositionSelect({ onStart }: Props) {
             </div>
 
             <label className="check">
-              <input type="checkbox" checked={aura} onChange={(e) => setAura(e.target.checked)} />
-              <span>Tactics Aura</span>
-            </label>
-            <label className="check">
               <input
                 type="checkbox"
                 checked={engineMayResign}
@@ -507,6 +491,8 @@ export function PositionSelect({ onStart }: Props) {
               <span>Engine may resign lost endgames</span>
             </label>
           </div>
+
+          <PrefsControls />
 
           <button type="button" className="btn btn--primary" disabled={!activePosition} onClick={start}>
             {activePosition ? `Play ${engineName.fullNet ? "full" : "lite"} Stockfish` : "Pick a position first"}

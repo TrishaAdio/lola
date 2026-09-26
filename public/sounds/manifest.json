@@ -1,0 +1,87 @@
+{
+  "generatedBy": "scripts/build-sounds.mjs",
+  "sampleRate": 48000,
+  "targetLufs": -27.5,
+  "sounds": {
+    "move": {
+      "file": "move.wav",
+      "durationMs": 258,
+      "momentaryMaxLufs": -27.5,
+      "samplePeakDb": -3.5,
+      "dominantHz": 395,
+      "attackCentroidHz": 560,
+      "above250Hz": 0.713,
+      "limiterDb": 0
+    },
+    "capture": {
+      "file": "capture.wav",
+      "durationMs": 286,
+      "momentaryMaxLufs": -27.5,
+      "samplePeakDb": -3.97,
+      "dominantHz": 395,
+      "attackCentroidHz": 532,
+      "above250Hz": 0.888,
+      "limiterDb": 0
+    },
+    "castle": {
+      "file": "castle.wav",
+      "durationMs": 343,
+      "momentaryMaxLufs": -27.5,
+      "samplePeakDb": -5.9,
+      "dominantHz": 611,
+      "attackCentroidHz": 561,
+      "above250Hz": 0.888,
+      "limiterDb": 0
+    },
+    "check": {
+      "file": "check.wav",
+      "durationMs": 963,
+      "momentaryMaxLufs": -27.5,
+      "samplePeakDb": -13.51,
+      "dominantHz": 294,
+      "attackCentroidHz": 340,
+      "above250Hz": 1,
+      "limiterDb": 0
+    },
+    "mate": {
+      "file": "mate.wav",
+      "durationMs": 1965,
+      "momentaryMaxLufs": -27.5,
+      "samplePeakDb": -15.13,
+      "dominantHz": 196,
+      "attackCentroidHz": 293,
+      "above250Hz": 0.243,
+      "limiterDb": 0
+    },
+    "end": {
+      "file": "end.wav",
+      "durationMs": 1260,
+      "momentaryMaxLufs": -27.5,
+      "samplePeakDb": -15.4,
+      "dominantHz": 262,
+      "attackCentroidHz": 280,
+      "above250Hz": 1,
+      "limiterDb": 0
+    },
+    "aura": {
+      "file": "aura.wav",
+      "durationMs": 1438,
+      "momentaryMaxLufs": -27.5,
+      "samplePeakDb": -16.96,
+      "dominantHz": 247,
+      "attackCentroidHz": 253,
+      "above250Hz": 0.119,
+      "limiterDb": 0
+    },
+    "illegal": {
+      "file": "illegal.wav",
+      "durationMs": 145,
+      "momentaryMaxLufs": -27.5,
+      "samplePeakDb": -1.55,
+      "dominantHz": 138,
+      "attackCentroidHz": 417,
+      "above250Hz": 0.645,
+      "limiterDb": 0
+    }
+  }
+}

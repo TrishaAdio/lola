@@ -558,6 +558,7 @@ input[type="range"] {
   border-radius: 8px;
   overflow: hidden;
   border: 1px solid var(--line);
+  box-shadow: 0 18px 40px -22px rgba(0, 0, 0, 0.8);
 }
 
 /* eval bar */
@@ -1186,32 +1187,6 @@ input[type="range"] {
   color: var(--text-dim);
 }
 
-.aura-slot {
-  min-height: 26px;
-  margin: -4px 0 8px;
-}
-
-.aura {
-  margin: 0;
-  font-size: 14px;
-  letter-spacing: 0.01em;
-  color: #e7b3b3;
-  animation: aura-in 0.5s ease-out, aura-out 1s ease-in 6s forwards;
-}
-
-@keyframes aura-in {
-  from {
-    opacity: 0;
-    transform: translateY(-3px);
-  }
-}
-
-@keyframes aura-out {
-  to {
-    opacity: 0;
-  }
-}
-
 .diverged {
   margin: 8px 0 0;
   font-size: 12px;
@@ -1269,4 +1244,442 @@ input[type="range"] {
   padding: 8px 12px;
   font: inherit;
   font-size: 13px;
+}
+
+/* ---------- board rendering ---------- */
+
+.board-frame {
+  --glow-period: 2.4s;
+}
+
+/* Piece movement: react-chessboard sets `transition: transform Nms`; give it weight. */
+.board-frame [data-piece] {
+  transition-timing-function: var(--move-ease) !important;
+}
+
+.sq {
+  position: relative;
+  width: 100%;
+  height: 100%;
+}
+
+.sq-piece {
+  position: relative;
+  z-index: 1;
+  width: 100%;
+  height: 100%;
+}
+
+.sq-layer {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+}
+
+.sq-layer--last {
+  background: var(--hl-last);
+}
+
+.sq-layer--selected {
+  background: var(--hl-selected);
+}
+
+.sq-threat {
+  background: rgba(214, 69, 69, 0.16);
+  animation: fade-in 0.28s ease-out both;
+}
+
+.sq-threat--hanging {
+  background: rgba(214, 69, 69, 0.16);
+  box-shadow: inset 0 0 0 2px rgba(214, 69, 69, 0.7);
+  animation: fade-in 0.28s ease-out both;
+}
+
+@keyframes fade-in {
+  from {
+    opacity: 0;
+  }
+}
+
+/* Legal destinations: a quiet dot, or a ring around a piece that can be taken. */
+.sq-target {
+  position: absolute;
+  inset: 0;
+  z-index: 2;
+  pointer-events: none;
+  background: radial-gradient(circle, var(--hl-target) 17%, transparent 18.5%);
+}
+
+.sq-target--capture {
+  background: radial-gradient(circle, transparent 60%, var(--hl-target) 61.5%, var(--hl-target) 72%, transparent 73.5%);
+}
+
+/* The taken piece shrinks and fades under the piece that took it. */
+.capture-ghost {
+  position: absolute;
+  inset: 0;
+  z-index: 0;
+  pointer-events: none;
+  animation-name: capture-out;
+  animation-timing-function: cubic-bezier(0.4, 0, 0.6, 1);
+  animation-fill-mode: both;
+}
+
+@keyframes capture-out {
+  to {
+    opacity: 0;
+    transform: scale(0.72);
+  }
+}
+
+/* Check: a soft ring that breathes slowly. Mate: the same ring, held. */
+.king-glow {
+  position: absolute;
+  inset: 0;
+  z-index: 0;
+  pointer-events: none;
+  background: radial-gradient(circle, var(--hl-check) 0%, var(--hl-check) 22%, transparent 70%);
+  opacity: 0.72;
+  animation: king-breathe var(--glow-period) ease-in-out infinite;
+}
+
+.king-glow--mate {
+  opacity: 0.9;
+  animation: fade-in 0.4s ease-out both;
+  box-shadow: inset 0 0 0 2px var(--hl-check);
+}
+
+@keyframes king-breathe {
+  50% {
+    opacity: 1;
+  }
+}
+
+/* The app's piece set: lifted slightly off the board. */
+.piece {
+  display: block;
+  filter: drop-shadow(0 1.5px 1px rgba(0, 0, 0, 0.32));
+  overflow: visible;
+}
+
+.piece-icon .piece {
+  filter: drop-shadow(0 1px 0.5px rgba(0, 0, 0, 0.3));
+}
+
+/* ---------- icon chrome (Lucide, one set, line icons in currentColor) ---------- */
+
+.btn--icon {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+}
+
+.btn--icon svg {
+  flex: none;
+}
+
+.icon-btn {
+  display: inline-grid;
+  place-items: center;
+  width: 34px;
+  height: 34px;
+  border-radius: 8px;
+  border: 1px solid transparent;
+  background: transparent;
+  color: var(--text-dim);
+  transition: color 0.15s, border-color 0.15s, background 0.15s;
+}
+
+.icon-btn:hover:not(:disabled) {
+  color: var(--text);
+  border-color: var(--line);
+}
+
+.icon-btn[aria-pressed="true"],
+.icon-btn[aria-expanded="true"] {
+  color: var(--text);
+  border-color: var(--line);
+  background: var(--bg-sunken);
+}
+
+.play__divider {
+  width: 1px;
+  height: 18px;
+  margin: 0 6px;
+  background: var(--line);
+}
+
+/* ---------- settings ---------- */
+
+.settings-menu {
+  position: relative;
+}
+
+.settings-menu__panel {
+  position: absolute;
+  right: 0;
+  top: calc(100% + 8px);
+  z-index: 30;
+  width: 300px;
+  padding: 16px;
+  background: var(--bg-raised);
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  box-shadow: 0 24px 48px -16px rgba(0, 0, 0, 0.7);
+  animation: menu-in 0.16s var(--ease-out, ease-out) both;
+}
+
+.settings-menu__panel .field:first-child {
+  margin-top: 0;
+}
+
+@keyframes menu-in {
+  from {
+    opacity: 0;
+    transform: translateY(-4px);
+  }
+}
+
+.swatches {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 8px;
+}
+
+.swatch {
+  display: grid;
+  gap: 6px;
+  justify-items: center;
+  padding: 8px 6px;
+  background: var(--bg-sunken);
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  color: var(--text-dim);
+  font-size: 11.5px;
+}
+
+.swatch--active {
+  border-color: var(--accent);
+  color: var(--text);
+}
+
+.swatch__board {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  width: 34px;
+  height: 34px;
+  border-radius: 4px;
+  overflow: hidden;
+}
+
+.switches {
+  display: grid;
+  gap: 2px;
+  margin-top: 14px;
+}
+
+.switch {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 7px 0;
+  font-size: 13px;
+  color: var(--text);
+  cursor: pointer;
+  position: relative;
+}
+
+.switch--disabled {
+  color: var(--text-faint);
+  cursor: not-allowed;
+}
+
+.switch input {
+  position: absolute;
+  opacity: 0;
+  width: 1px;
+  height: 1px;
+}
+
+.switch__track {
+  flex: none;
+  width: 32px;
+  height: 18px;
+  border-radius: 999px;
+  background: var(--bg-sunken);
+  border: 1px solid var(--line);
+  position: relative;
+  transition: background 0.18s, border-color 0.18s;
+}
+
+.switch__track::after {
+  content: "";
+  position: absolute;
+  top: 2px;
+  left: 2px;
+  width: 12px;
+  height: 12px;
+  border-radius: 50%;
+  background: var(--text-faint);
+  transition: transform 0.18s cubic-bezier(0.215, 0.61, 0.355, 1), background 0.18s;
+}
+
+.switch input:checked + .switch__track {
+  background: var(--accent-soft);
+  border-color: var(--accent);
+}
+
+.switch input:checked + .switch__track::after {
+  transform: translateX(14px);
+  background: var(--accent);
+}
+
+.switch input:focus-visible + .switch__track {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+}
+
+.prefs {
+  margin-top: 4px;
+}
+
+.setup .prefs {
+  margin-top: 18px;
+  padding-top: 4px;
+  border-top: 1px solid var(--line-soft);
+}
+
+/* ---------- Tactics Aura HUD ---------- */
+
+.aura-hud {
+  height: 30px;
+  display: flex;
+  align-items: center;
+  max-width: 682px;
+  overflow: hidden;
+}
+
+.aura-hud__line {
+  position: relative;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin: 0;
+  padding: 5px 16px 5px 0;
+  font-size: 13.5px;
+  letter-spacing: 0.015em;
+  color: #eed2cf;
+  background: linear-gradient(90deg, rgba(214, 69, 69, 0.16), rgba(214, 69, 69, 0.05) 70%, transparent);
+  animation:
+    hud-in 0.42s cubic-bezier(0.215, 0.61, 0.355, 1) both,
+    hud-out var(--hud-out-ms, 0.9s) ease-in var(--hud-out-delay, 5.6s) forwards;
+}
+
+.aura-hud__line::after {
+  content: "";
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  height: 1px;
+  background: linear-gradient(90deg, rgba(214, 69, 69, 0.8), transparent 80%);
+}
+
+.aura-hud__tick {
+  width: 3px;
+  align-self: stretch;
+  background: var(--accent);
+}
+
+@keyframes hud-in {
+  from {
+    opacity: 0;
+    transform: translateX(-14px);
+    clip-path: inset(0 100% 0 0);
+  }
+  to {
+    clip-path: inset(0 0 0 0);
+  }
+}
+
+@keyframes hud-out {
+  to {
+    opacity: 0;
+    transform: translateX(6px);
+  }
+}
+
+/* ---------- game-over review strip ---------- */
+
+.review {
+  position: relative;
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  margin: 14px 0;
+  padding: 9px 10px 9px 16px;
+  background: var(--bg-raised);
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  overflow: hidden;
+  animation: fade-in 0.35s ease-out both;
+}
+
+.review__result {
+  font-weight: 600;
+  font-size: 14px;
+}
+
+.review__timer {
+  margin-left: auto;
+  font-family: var(--mono);
+  font-size: 12px;
+  color: var(--text-faint);
+  font-variant-numeric: tabular-nums;
+}
+
+.btn--review {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 6px 10px 6px 14px;
+  background: var(--bg-sunken);
+  font-size: 13px;
+}
+
+.review__bar {
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  height: 2px;
+  background: var(--accent);
+  opacity: 0.55;
+  transform-origin: left;
+  transition: transform 0.25s linear;
+}
+
+/* ---------- reduced motion: no slides, pulses or fades ---------- */
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.001ms !important;
+    animation-delay: 0ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.001ms !important;
+    scroll-behavior: auto !important;
+  }
+
+  .aura-hud__line {
+    /* Keep the line readable, then remove it without motion. */
+    animation: none;
+  }
+
+  .king-glow {
+    animation: none;
+    opacity: 0.75;
+  }
 }

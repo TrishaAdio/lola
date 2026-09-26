@@ -2,11 +2,13 @@ import { useState } from "react";
 
 interface Props {
   disabled: boolean;
+  /** Placeholder while disabled, e.g. "Engine is thinking…" or "Game over". */
+  disabledText?: string;
   onSubmit: (san: string) => string | null;
 }
 
 /** Text entry for algebraic notation, for players who would rather type than drag. */
-export function MoveInput({ disabled, onSubmit }: Props) {
+export function MoveInput({ disabled, disabledText = "Engine is thinking\u2026", onSubmit }: Props) {
   const [value, setValue] = useState("");
   const [error, setError] = useState<string | null>(null);
 
@@ -26,7 +28,7 @@ export function MoveInput({ disabled, onSubmit }: Props) {
         disabled={disabled}
         spellCheck={false}
         autoComplete="off"
-        placeholder={disabled ? "Engine is thinking…" : "Type a move — Nf3, e4, O-O, exd5, e8=Q"}
+        placeholder={disabled ? disabledText : "Type a move — Nf3, e4, O-O, exd5, e8=Q"}
         onChange={(e) => {
           setValue(e.target.value);
           if (error) setError(null);

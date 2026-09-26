@@ -28,6 +28,46 @@ import type { AuraMessage } from "../aura/aura";
 import { auraInputFrom } from "../aura/inputs";
 import { useClock } from "./useClock";
 import type { TimeControl } from "./useClock";
+import { AURA_VISIBLE_MS, THREAT_VISIBLE_MS } from "../config";
+
+/** Everything the board needs to animate and voice the last move. */
+export interface MoveVisual {
+  /** Increments with every move, so effects can key on it. */
+  id: number;
+  from: Square;
+  to: Square;
+  san: string;
+  color: Color;
+  by: "user" | "engine";
+  /** "drop" moves are placed instantly; everything else slides. */
+  via: "drop" | "animated";
+  captured?: { type: string; color: Color; square: Square };
+  castle: boolean;
+  promotion: boolean;
+  check: boolean;
+  mate: boolean;
+}
+
+function moveVisual(move: Move, id: number, by: MoveVisual["by"], via: MoveVisual["via"]): MoveVisual {
+  const enPassant = move.flags.includes("e");
+  const capturedSquare = (enPassant ? `${move.to[0]}${move.from[1]}` : move.to) as Square;
+  return {
+    id,
+    from: move.from,
+    to: move.to,
+    san: move.san,
+    color: move.color,
+    by,
+    via,
+    captured: move.captured
+      ? { type: move.captured, color: move.color === "w" ? "b" : "w", square: capturedSquare }
+      : undefined,
+    castle: move.flags.includes("k") || move.flags.includes("q"),
+    promotion: Boolean(move.promotion),
+    check: move.san.includes("+") || move.san.includes("#"),
+    mate: move.san.includes("#"),
+  };
+}
 
 export type { GameOverInfo } from "../chess/rules";
 
@@ -41,8 +81,6 @@ export interface GameSetup {
   /** Strategic layer on top of Stockfish. Off = Stockfish's #1 move, always. */
   strategic: boolean;
   drawClaims: DrawClaimMode;
-  /** Tactics Aura commentary. */
-  aura: boolean;
   /** Let the engine resign hopeless technical endgames. Off by default. */
   engineMayResign: boolean;
   timeControl: TimeControl | null;
@@ -109,8 +147,6 @@ function moveNumberOf(fen: string): number {
   return Number.isFinite(n) && n > 0 ? n : 1;
 }
 
-const AURA_STORAGE_KEY = "ruthless-chess:aura";
-
 export function useGame(setup: GameSetup) {
   const engineRef = useRef<UciEngine | null>(null);
   const chessRef = useRef<Chess>(new Chess());
@@ -138,27 +174,18 @@ export function useGame(setup: GameSetup) {
   const [assessment, setAssessment] = useState<Assessment | null>(null);
   const [decision, setDecision] = useState<PolicyDecision | null>(null);
   const [threats, setThreats] = useState<ThreatReport | null>(null);
-  const [lastMove, setLastMove] = useState<{ from: Square; to: Square } | null>(null);
+  const [lastMove, setLastMove] = useState<MoveVisual | null>(null);
+  const moveIdRef = useRef(0);
   const [pendingPromotion, setPendingPromotion] = useState<{ from: Square; to: Square } | null>(null);
   const [searchDepth, setSearchDepth] = useState(0);
   const [drawOffer, setDrawOfferState] = useState<DrawOffer | null>(null);
   const [auraMessage, setAuraMessage] = useState<(AuraMessage & { id: number }) | null>(null);
-  const [auraEnabled, setAuraEnabledState] = useState(setup.aura);
 
   const engineColor = useMemo(() => opposite(setup.userColor), [setup.userColor]);
 
   const setDrawOffer = useCallback((offer: DrawOffer | null) => {
     offerRef.current = offer;
     setDrawOfferState(offer);
-  }, []);
-
-  const setAuraEnabled = useCallback((on: boolean) => {
-    setAuraEnabledState(on);
-    try {
-      localStorage.setItem(AURA_STORAGE_KEY, on ? "on" : "off");
-    } catch {
-      /* storage unavailable */
-    }
   }, []);
 
   const finish = useCallback((info: GameOverInfo) => {
@@ -277,14 +304,14 @@ export function useGame(setup: GameSetup) {
   /** Clears threat highlights a few seconds after they appear. */
   useEffect(() => {
     if (!threats) return;
-    const timer = setTimeout(() => setThreats(null), 4500);
+    const timer = setTimeout(() => setThreats(null), THREAT_VISIBLE_MS);
     return () => clearTimeout(timer);
   }, [threats]);
 
   /** Aura lines fade out on their own. */
   useEffect(() => {
     if (!auraMessage) return;
-    const timer = setTimeout(() => setAuraMessage(null), 7000);
+    const timer = setTimeout(() => setAuraMessage(null), AURA_VISIBLE_MS);
     return () => clearTimeout(timer);
   }, [auraMessage]);
 
@@ -486,7 +513,7 @@ export function useGame(setup: GameSetup) {
 
       setDecision(chosen);
       setThreats(chosen.chosen.report);
-      setLastMove({ from: move.from, to: move.to });
+      setLastMove(moveVisual(move, ++moveIdRef.current, "engine", "animated"));
       setFen(fenAfter);
 
       // 7. Rules after the move. If it steered into a draw on purpose, it claims it.
@@ -566,7 +593,7 @@ export function useGame(setup: GameSetup) {
 
   // ---- user actions -----------------------------------------------------------------
   const applyUserMove = useCallback(
-    (from: Square, to: Square, promotion?: string): boolean => {
+    (from: Square, to: Square, promotion?: string, via: MoveVisual["via"] = "animated"): boolean => {
       const chess = chessRef.current;
       if (chess.turn() !== setup.userColor || gameOver) return false;
 
@@ -603,7 +630,7 @@ export function useGame(setup: GameSetup) {
           before,
         },
       ]);
-      setLastMove({ from: move.from, to: move.to });
+      setLastMove(moveVisual(move, ++moveIdRef.current, "user", via));
       setPendingPromotion(null);
       // A declined offer is history once the user moves again.
       if (offerRef.current?.status === "declined") setDrawOffer(null);
@@ -718,23 +745,12 @@ export function useGame(setup: GameSetup) {
     canOfferDraw,
     offerDraw,
     clock,
-    auraMessage: auraEnabled ? auraMessage : null,
-    auraEnabled,
-    setAuraEnabled,
+    auraMessage,
     setPendingPromotion,
     applyUserMove,
     playSan,
     resign,
     legalTargets,
   };
-}
-
-/** Reads the remembered aura preference, defaulting to on. */
-export function storedAuraPreference(): boolean {
-  try {
-    return localStorage.getItem(AURA_STORAGE_KEY) !== "off";
-  } catch {
-    return true;
-  }
 }
 

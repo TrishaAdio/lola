@@ -38,6 +38,7 @@ export interface AuraInput {
 }
 
 export type TriggerId =
+  | "mate-delivered"
   | "mate-net"
   | "constriction"
   | "blunder"
@@ -65,6 +66,14 @@ const NUMBER_WORDS = ["zero", "one", "two", "three", "four", "five"];
  */
 export const TRIGGERS: Trigger[] = [
   {
+    id: "mate-delivered",
+    urgent: true,
+    cooldown: 0,
+    // The move just played is checkmate.
+    when: (i) => i.mateIn === 0,
+    lines: () => ["It was over a few moves ago.", "Nowhere left to go.", "That's the one."],
+  },
+  {
     id: "mate-net",
     urgent: true,
     cooldown: 4,
@@ -80,7 +89,8 @@ export const TRIGGERS: Trigger[] = [
   {
     id: "constriction",
     cooldown: 5,
-    when: (i) => i.humanReplies <= 3 && i.winAfterEngine >= 85,
+    // Replies must remain: with none left the game is over, not closing in.
+    when: (i) => i.humanReplies >= 1 && i.humanReplies <= 3 && i.winAfterEngine >= 85,
     lines: () => [
       "You're running out of moves.",
       "Fewer choices every turn.",

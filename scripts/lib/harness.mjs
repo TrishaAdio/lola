@@ -79,8 +79,21 @@ export async function waitForUserTurn(page, timeout = 180000) {
  * Opens the app and starts a game from `fen` playing `side`. `configure` may adjust the
  * setup screen (e.g. toggle settings) before the game starts.
  */
-export async function startGame(browser, base, { fen, side = "White", configure, waitTurn = true, errors } = {}) {
-  const page = await browser.newPage({ viewport: { width: 1440, height: 1000 } });
+export async function startGame(
+  browser,
+  base,
+  { fen, side = "White", configure, waitTurn = true, errors, init, prefs, reducedMotion } = {},
+) {
+  const context = await browser.newContext({
+    viewport: { width: 1440, height: 1000 },
+    reducedMotion: reducedMotion ? "reduce" : "no-preference",
+  });
+  const page = await context.newPage();
+  page.on("close", () => context.close().catch(() => {}));
+  if (prefs) {
+    await page.addInitScript((p) => localStorage.setItem("ruthless-chess:prefs", JSON.stringify(p)), prefs);
+  }
+  if (init) await page.addInitScript(init);
   if (errors) {
     page.on("pageerror", (e) => errors.push(`pageerror: ${e.message}`));
     page.on("console", (m) => m.type() === "error" && errors.push(m.text()));
@@ -119,11 +132,7 @@ export async function drag(page, from, to) {
 
 export async function clickMove(page, from, to) {
   await page.click(`[data-square="${from}"]`);
-  await page.waitForFunction(
-    (sq) => (document.querySelector(`[data-square="${sq}"] div`)?.getAttribute("style") ?? "").includes("background"),
-    from,
-    { timeout: 10000 },
-  );
+  await page.waitForSelector(`[data-sq="${from}"] .sq-layer--selected`, { timeout: 10000 });
   await page.click(`[data-square="${to}"]`);
 }
 
@@ -144,4 +153,11 @@ export async function waitForPlies(page, n, timeout = 180000) {
     n,
     { timeout },
   );
+}
+
+/** Skips the game-over review strip to reach the summary modal. */
+export async function continueToSummary(page) {
+  await page.waitForSelector("[data-testid=review-strip]", { timeout: 20000 });
+  await page.click("[data-testid=review-strip] .btn--review");
+  await page.waitForSelector(".modal .summary__head", { timeout: 5000 });
 }

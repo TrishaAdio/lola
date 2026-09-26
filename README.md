@@ -12,7 +12,7 @@ and is driven over the UCI protocol.
 ```bash
 npm install     # also copies the engine binaries into public/engine/
 npm run dev
-npm run verify  # unit tests + position validation + browser smoke test
+npm run verify  # unit tests, position validation, and three real-browser suites
 ```
 
 ## Engine builds
@@ -77,28 +77,79 @@ Cross-Origin-Embedder-Policy: require-corp
 
 Without them the app still works and falls back to a single-threaded build.
 
-## What makes it ruthless
+## Move selection: Stockfish plus a strategic layer
 
-Stockfish's own search is **not** modified. The engine is asked for its top 3 lines
-(MultiPV 3) and `src/engine/policy.ts` chooses between them:
+Stockfish provides tactical ground-truth; the strategic layer re-ranks near-equal options
+to produce human-like, plan-driven play rather than pure engine-optimal play. Stockfish's
+search is never modified: it returns its top 5 lines (MultiPV 5) and
+`src/engine/policy.ts` chooses between them.
 
-1. **Fastest mate.** Mate scores are ranked so a shorter mate always beats a longer one,
-   and a longer *survival* always beats a quicker loss. It plays to actual mate rather
-   than shuffling in a won endgame.
-2. **No voluntary draws.** A candidate that hands the opponent a threefold-repetition or
-   fifty-move claim is rejected outright — unless the engine is genuinely losing, where a
-   draw is a good result and the penalty is dropped.
-3. **Pressure tie-break.** Among moves Stockfish rates within `TIE_BREAK_WINDOW_CP`
-   (25 cp) of its best, it prefers the one that keeps the most pressure: checks, fewer
-   legal replies for the opponent, and undefended enemy material. Outside that window
-   evaluation always wins — aggression never costs real eval.
+Tactics always win:
 
-The commentary panel shows each candidate's evaluation, the opponent's reply count and
-its pressure score, plus which move was chosen and why.
+- a forced mate is converted by the shortest line; when being mated, the longest defence
+- a candidate more than **30 cp or 3 win-%** worse than Stockfish's best is never played,
+  or **45 cp** when it stops the opponent's best idea
+- no deviation may leave material en prise that Stockfish's #1 did not
+- no voluntary draws unless genuinely losing, in which case it steers for them
 
-Turn the layer off with the "Kill-instinct tie-break" checkbox to get plain Stockfish
-best-move play. "Practice" mode is the only place strength is actually reduced, via real
-`Skill Level` weakening and an optional `UCI_Elo` cap.
+Among the surviving candidates, a capped strategic score re-ranks
+(`src/engine/strategy/`):
+
+- **king safety trajectory**: pawn shield, attackers on the king zone, read at the end of
+  each candidate's line rather than just after the move
+- **piece activity and space**: safe mobility, central control, outposts, open files
+- **pawn structure**: isolated, doubled and backward pawns, holes in front of the king
+- **plan continuity**: a plan (pawn storm, minority attack, central break, simplify when
+  winning, consolidate when worse) is adopted once a structure appears and kept while it
+  holds; moves that advance it get a bonus
+- **prophylaxis**: a null-move search asks what the opponent would do with a free move;
+  a candidate that makes that idea illegal or losing is rewarded
+
+Every decision is logged to the dev console, with a per-candidate breakdown, and to
+`window.__strategy` (`__strategy.summary()` gives the divergence rate). The commentary
+panel shows the plan, the opponent's idea, and when and why the move differs from
+Stockfish's #1. Turn the layer off in setup for plain Stockfish best-move play. Practice
+mode is the only place strength is actually reduced.
+
+## Rules
+
+Chess.com's ruleset, in `src/chess/rules.ts`:
+
+- **Insufficient material** follows USCF, as Chess.com does: a draw only when mate cannot
+  be *forced*. So K+N+N v K is a draw, even though FIDE plays on because a helpmate exists.
+  chess.js's own check misses this case.
+- **Timeout vs insufficient material**: if the side with time left cannot force mate, a
+  flag is a draw, not a loss. Chess.com's one exception, K+N+N, still wins on time.
+- **Threefold repetition and the 50-move rule** are claims by default: a Claim draw /
+  Play on prompt appears, and the game continues if you play on. Fivefold repetition and
+  the 75-move rule end the game on their own so it can never run forever. The Automatic
+  setting instead ends the game the moment they occur, which is what Chess.com's own
+  online games do.
+- **Draw offers** stay open until the engine answers or moves (moving declines). The
+  engine accepts only when genuinely losing (WDL loss >= 60%) or in a dead draw.
+- **Castling**: drag or click the king two squares or onto its own rook, or type
+  `O-O`, `0-0`, `o-o`. Castling rights a pasted FEN claims but the board cannot support
+  are removed and reported.
+- **Promotion** always asks for the piece, including when typed as `b8` without one.
+- The engine never resigns unless "Engine may resign" is switched on.
+
+## Look, motion and sound
+
+See [ASSETS.md](ASSETS.md) for sources and licences.
+
+- **Pieces**: the Cburnett geometry (GPLv2+), restyled and themed through CSS variables.
+  No emoji or Unicode chess glyphs are used anywhere.
+- **Board themes**: Slate, Oxblood, Glacier, with legibility enforced by tests.
+- **Icons**: Lucide only.
+- **Motion**: pieces slide with an ease-out cubic over 190 ms; captured pieces shrink and
+  fade; a checked king gets a slowly breathing glow, a mated one a steady ring. All of it
+  switches off under `prefers-reduced-motion`.
+- **Sound**: one synthesised material (boxwood on felt, a wooden bar) for move, capture,
+  castle, check, mate, game end, illegal move and the aura cue, loudness-matched. Master
+  mute, and separate switches for board sounds, aura sounds and aura lines.
+- **Game over**: the summary does not cover the board at once. The final position stays
+  up with a result strip and a countdown (`GAME_OVER_REVIEW_SECONDS` in `src/config.ts`,
+  default 60); Continue, Enter/Escape, or a click outside the board opens it early.
 
 ## Starting positions
 
@@ -119,30 +170,35 @@ already finished.
 ## Project layout
 
 ```
-src/engine/    UCI client, engine tiers/capability detection, ruthless move policy
-src/chess/     chess.js helpers: positions, threat analysis, eval conversion,
-               post-game analysis, PV-to-English gloss
-src/hooks/     useGame - the engine/turn loop and all game state
-src/components/ setup screen, board, eval bar, commentary, history, summary
-scripts/       engine sync/chunking, position validation, browser smoke test
-engine-parts/  the full NNUE engine, committed as 40 MiB chunks + sha256 manifest
+src/engine/     UCI client, engine tiers, move policy; strategy/ holds the strategic layer
+src/chess/      rules, move resolution, positions, threats, analysis, PV gloss
+src/aura/       Tactics Aura trigger table
+src/audio/      sound playback and the move-to-sound mapping
+src/pieces/     the themed piece set (geometry generated from assets/pieces/)
+src/theme/      board themes
+src/hooks/      useGame (engine and turn loop), clock, game-over review
+src/components/ setup screen, board, commentary, history, summary, settings
+src/config.ts   timing constants
+scripts/        engine sync/chunking, piece and sound builds, browser test suites
+engine-parts/   the full NNUE engine, committed as 40 MiB chunks + sha256 manifest
 ```
 
 ## Verification
 
-- `npm run test` — 19 unit tests. The policy tests assert the fastest-mate override, that
-  a real threefold repetition is refused when level but accepted when losing, that the
-  pressure tie-break prefers forcing moves, and critically that it **never** trades
-  evaluation for aggression. The UCI parser is tested against real `info` lines including
-  mate scores, WDL and bound flags.
-- `npm run verify:positions` — validates the whole position library.
-- `npm run smoke` — builds, serves `dist/` in-process with the isolation headers, and
-  drives a real headless browser: boots the engine, seeds the eval bar, plays a typed
-  algebraic move and a click move, checks the engine's reply is legal via chess.js,
-  verifies underpromotion (`bxc8=N`), the insufficient-material draw, the board flip, and
-  that the engine finds a forced mate (`Ra8#`). When the full NNUE build has been
-  assembled, it also boots that 94 MiB engine and checks it plays a legal move — which is
-  what proves the chunk reassembly produced a working binary.
+- `npm run test`: 142 unit tests, covering the policy's tactical ceilings and each
+  strategic term, the Chess.com rules including the USCF and timeout cases, castling
+  through every input path, the aura trigger table, theme contrast, and the sound files'
+  loudness and peaks.
+- `npm run verify:positions`: the whole position library is legal and playable.
+- `npm run smoke`: engine boot, typed and clicked moves, underpromotion, flip, forced
+  mate, and the full NNUE build when assembled.
+- `scripts/e2e-rules.mjs`: castling by 10 input paths for both colours, 50-move claims in
+  both modes, draw offers declined and accepted by evaluation, and 14 moves of real play
+  checking the strategic layer diverges from Stockfish's #1 within its cost cap.
+- `scripts/e2e-experience.mjs`: piece set and icon audit, theme switching and
+  persistence, move easing, capture fade, check glow, reduced motion, every sound switch,
+  the aura HUD and its mute, and the game-over review (strip, countdown, board clicks do
+  not skip, Continue / Escape / click-anywhere, and auto-advance at 60 s).
 
 ## Notes on accuracy scoring
 
@@ -161,5 +217,8 @@ via the [`stockfish`](https://github.com/nmrugg/stockfish.js) npm package (Stock
 Nathan Rugg / Chess.com). If you distribute a build of this app, review your GPL
 obligations for the bundled engine.
 
-Built with [chess.js](https://github.com/jhlywa/chess.js) (BSD-2-Clause) and
-[react-chessboard](https://github.com/Clariity/react-chessboard) (MIT).
+The piece geometry is Cburnett (GPLv2+); see [ASSETS.md](ASSETS.md).
+
+Built with [chess.js](https://github.com/jhlywa/chess.js) (BSD-2-Clause),
+[react-chessboard](https://github.com/Clariity/react-chessboard) (MIT) and
+[Lucide](https://lucide.dev) (ISC).

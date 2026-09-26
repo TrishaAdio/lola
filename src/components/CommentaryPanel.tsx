@@ -48,7 +48,7 @@ function WdlBar({ wdl }: { wdl: [number, number, number] }) {
         <span className="wdl__loss" style={{ width: pct(wdl[2]) }} />
       </div>
       <span className="wdl__legend">
-        win {pct(wdl[0])} · draw {pct(wdl[1])} · loss {pct(wdl[2])}
+        engine: win {pct(wdl[0])} · draw {pct(wdl[1])} · loss {pct(wdl[2])}
       </span>
     </div>
   );

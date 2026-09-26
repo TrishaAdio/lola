@@ -174,7 +174,7 @@ try {
     const page = await startGame(browser, server.base, { fen: "4k3/8/8/8/8/8/3Q4/4K3 w - - 0 1", errors });
     await page.click(".btn:has-text('Offer draw')");
     await drag(page, "d2", "d4");
-    const accepted = await page.waitForFunction(() => /Draw agreed/.test(document.body.innerText), null, { timeout: 60000 }).then(() => true).catch(() => false);
+    const accepted = await page.waitForFunction(() => /Draw agreed|Agreement \u2014 Draw/.test(document.body.innerText), null, { timeout: 60000 }).then(() => true).catch(() => false);
     if (accepted) r.pass("engine accepts a draw offer when it is genuinely losing");
     else r.fail("engine did not accept a draw offer in a lost position");
     await page.close();

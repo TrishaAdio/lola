@@ -1,29 +1,34 @@
 # Lola Engine: Build Plan
 
 The goal is an original chess engine, written from scratch, that replaces Stockfish in this
-app and gets as close to the top of the rating lists as engineering and compute allow. It
-uses no Stockfish code, no Stockfish nets, no Stockfish-generated data, and no Lc0 nets or
-data.
+app and then beats Stockfish head to head. It uses no Stockfish code, no Stockfish nets,
+no Stockfish-generated data, and no Lc0 nets or data.
 
-## 1. Reality check on "4500 Elo"
+## 1. The finish line
 
-The target number needs defining before we start, because as a literal goal it cannot be
-reached, and the reason affects how we measure progress.
+Lola beats the latest Stockfish in a long match (1,000+ games from paired openings) at
+the same time control on the same machine, with a statistically significant score above
+50%.
 
-- **Elo only means something relative to a pool.** The top engines sit around 3600 to 3700
-  on the CCRL-style lists. The exact figure depends on the list, the time control and the
-  opening book. No list has a 4500 player to measure against.
-- **Chess at this level is mostly draws.** A rating gap of D implies an expected score of
-  `1 / (1 + 10^(-D/400))`. Being 900 Elo above Stockfish means scoring about **99.5%**
-  against it. Stockfish draws itself from the standard start nearly every time at longer
-  time controls, which is why TCEC forces unbalanced openings. An engine that "crushes"
-  Stockfish from balanced positions is ruled out by how drawish the game is, not by weak
-  engineering.
-- **So "4500" becomes a set of measurable targets** (section 2). The top one is "beats
-  the current Stockfish in a statistically significant head-to-head match". Nobody
-  outside the Stockfish project has done that in years. It is a multi-year stretch goal.
+Stockfish has lost before, and how it lost is the blueprint:
 
-Everything below is designed so each phase ends with a measured Elo number, not a guess.
+- Leela Chess Zero won the TCEC superfinal against Stockfish in Seasons
+  [15](https://en.wikipedia.org/wiki/TCEC_Season_15) and
+  [17](https://en.wikipedia.org/wiki/TCEC_Season_17).
+- AlphaZero beat Stockfish 8 over
+  [1,000 games (+155 -6)](https://www.chess.com/news/view/updated-alphazero-crushes-stockfish-in-new-1-000-game-match)
+  after [self-play on 5,000 TPUs](https://en.wikipedia.org/wiki/AlphaZero).
+- Stockfish won the [Season 26 superfinal](https://lczero.org/watch) (2024), but Leela
+  still won 17 of the 100 games. The measured gap was about 49 Elo.
+- Stockfish's default nets have been trained on
+  [data converted from Leela's self-play games](https://robotmoon.com/nnue-training-data/)
+  since 2022.
+
+Every win came from a large neural network on GPUs trained by self-play. Stockfish's
+current strength is Leela's data plus its CPU search. Lola builds both halves with its
+own code and data, then combines them (sections 4.6 and 4.7).
+
+Every phase ends with a measured Elo number, not a guess.
 
 ## 2. Targets
 
@@ -38,10 +43,10 @@ goes into Lola.
 | M3 First net | NNUE trained only on Lola self-play data | 3100 to 3300 |
 | M4 Flywheel | iterated data/net generations, full search feature set | 3400 to 3550 |
 | M5 Top tier | parity-range with the strongest engines | 3600+ |
-| M6 Stretch | positive, SPRT-confirmed score vs current Stockfish | above Stockfish |
+| M6 Beat Stockfish | the section 1 match, won | above Stockfish |
 
-M1 to M3 are realistic in months. M4 and M5 take sustained compute and discipline. M6 is
-the research frontier.
+M1 to M3 take months. M4 and M5 take sustained compute. M6 adds Lola-Zero and the hybrid
+(sections 4.6 and 4.7) on top.
 
 ## 3. Constraints set by this app
 
@@ -62,6 +67,8 @@ The engine is a drop-in replacement for the Stockfish worker (`src/engine/uci.ts
 - keep downloads sane: a **lite net** (at most ~2 MB, the current default experience) and a
   **full net** (target at most ~40 MB, fits the existing chunking scheme)
 - keep strength-limiting (`Skill Level`, `UCI_LimitStrength`) for Practice mode only
+- use the player's GPU through **WebGPU** when available (section 4.7). Stockfish's
+  WebAssembly build runs on the CPU only.
 
 The same codebase also builds **natively** (AVX2/AVX-512). All training, data generation
 and testing runs natively, where it is 10 to 50x cheaper than in the browser.
@@ -83,6 +90,7 @@ engine/                     Cargo workspace
   bins/lola/                native UCI binary
   bins/lola-wasm/           wasm entry + worker glue (single and threaded)
 trainer/                    PyTorch NNUE trainer (our own), quantizer, exporter
+zero/                       Lola-Zero: transformer net, MCTS self-play, CUDA + WebGPU inference
 testing/                    SPRT runner, gauntlet configs, opening books (our own)
 ```
 
@@ -166,6 +174,38 @@ Throughput estimate: at 5k nodes/move, one modern core yields on the order of 10
 300 positions/s. A 64-core box gives roughly 0.5 to 1.5B positions per day. That is
 enough to iterate a generation every few days.
 
+### 4.6 Lola-Zero: the GPU engine
+This is the engine type that has beaten Stockfish. It has three jobs: produce
+Leela-quality training data of our own, be the GPU half of the hybrid, and play GPU
+matches on its own.
+
+- **network:** a transformer over the 64 squares with policy, WDL value and moves-left
+  heads. It starts small (8 to 10 layers) and grows as data allows.
+- **bootstrap:** first trained on Lola's own self-play games, which skips the expensive
+  random-play phase. After that, pure self-play reinforcement learning.
+- **self-play:** PUCT tree search at 400 to 800 visits per move, root noise, early-move
+  temperature, and KataGo-style efficiency tricks (playout-cap randomization, auxiliary
+  targets).
+- **inference:** CUDA natively, WebGPU in the browser, fp16/int8.
+- **data for Lola:** every self-play position is labelled with Lola-Zero's search value.
+  Lola's NNUE trains on it, the role Leela's data plays for Stockfish.
+- **gate:** a new network is promoted only if it beats the current one by SPRT.
+
+### 4.7 The hybrid
+Stockfish uses only the CPU, and most machines that run it have a GPU sitting idle. The
+hybrid uses both.
+
+- CPU threads run Lola's alpha-beta search. A GPU thread runs Lola-Zero's network on
+  batched requests.
+- The search posts positions (root, PV nodes, high-depth nodes) to a queue and reads
+  results from a hash-keyed cache. It never waits on the GPU, so its speed does not drop.
+- Where a result is available, the policy head drives move ordering and reductions. The
+  value head is blended with the NNUE eval, with a weight tuned by SPSA.
+- The same design runs natively (CUDA) and in the browser (WebGPU), where Stockfish's
+  WebAssembly build is CPU-only.
+- **gate:** the hybrid beats pure Lola at equal wall time on a CPU+GPU machine. Then it
+  plays the section 1 match against Stockfish on that same machine.
+
 ## 5. Phased roadmap
 
 Each phase has an exit gate. The next phase starts only after the gate passes.
@@ -209,17 +249,16 @@ Each phase has an exit gate. The next phase starts only after the gate passes.
   once it passes full Stockfish, remove Stockfish and the GPL assets (`engine-parts/`,
   the `stockfish` dependency)
 
-**Phase 6: research track toward M6 (ongoing)**
-Speculative ideas, each gated by SPRT and dropped if it fails:
-- a **small policy network** for move ordering at high-depth nodes only, where its cost
-  is amortized
-- larger post-FT layers made affordable by sparsity-aware inference (skip zero blocks
-  after the activation)
-- multi-objective training: eval + WDL + "search disagreement" targets from deep
-  rescoring
-- learned LMR/pruning margins (a tiny model on node features instead of hand formulas)
-- opening play tuned for winning chances against draw-seeking opponents, since at the
-  top the Elo comes from unbalanced positions
+**Phase 6: Lola-Zero and the hybrid (year 2 onward)**
+- Lola-Zero pipeline (section 4.6): bootstrap networks from Lola's games, then self-play
+  RL with the promotion gate
+- Lola's NNUE trained on Lola-Zero-labelled data must beat the NNUE trained on Lola-only
+  data by SPRT
+- the hybrid (section 4.7) must beat pure Lola at equal wall time
+- further edges, each SPRT-gated: threat-aware NNUE inputs, larger layers made affordable
+  by sparsity-aware inference, learned pruning margins, multi-objective training from
+  deep rescoring, and a match opening repertoire aimed at positions Lola scores well in
+- *gate:* M6, the Stockfish match
 
 ## 6. Testing discipline
 
@@ -238,17 +277,27 @@ This is what separates a 3600 engine from a 3000 one. It is non-negotiable.
 - **Browser benchmark**: nps and depth-at-1s in Chrome, Firefox and Safari for every
   release candidate, since native gains do not always carry over to wasm.
 
-## 7. Compute budget (order of magnitude)
+## 7. Compute and cost
 
-| Workload | Resource |
-| --- | --- |
-| SPRT testing | 64 to 256 CPU cores continuously once past M2 |
-| Datagen | 64+ cores, bursts to several hundred per generation |
-| Training | 1 modern GPU; a 1024-wide net trains in hours to a day |
-| Storage | ~20 to 40 bytes/position packed; billions of positions = tens to hundreds of GB |
+Priced at the marketplace rate for a 16-core + RTX 3090 box (about $0.17/h).
 
-Without that compute, the realistic ceiling is roughly M3/M4. Nothing in the design
-changes, only the pace.
+| Stage | Goal | Compute | Rough cost |
+| --- | --- | --- | --- |
+| Months 0 to 3 | M1, M2 | this sandbox + 1 rented box part-time | a few hundred dollars |
+| Months 3 to 12 | M3, M4 | ~10 boxes | ~$10k |
+| Year 2 | M5, Lola-Zero running | ~30 boxes | ~$45k |
+| Year 3 | M6 | ~100 boxes (~1,600 cores, 100 GPUs) | ~$150k |
+
+- **Reference point:** Stockfish's test farm played about
+  [241M long-time-control games in 2024](https://huggingface.co/datasets/official-stockfish/fishtest_pgns)
+  at [about 3 core-minutes each](https://official-stockfish.github.io/docs/fishtest-wiki/Fishtest-FAQ.html).
+  That is roughly 1,400 cores around the clock for long tests alone. The year-3 stage
+  matches it.
+- **Volunteers cut the bill sharply.** Stockfish and Leela get most of their compute
+  from donated machines. Open-sourcing Lola with a worker program anyone can run is the
+  biggest cost lever.
+- **Storage:** ~20 to 40 bytes per packed position, so billions of positions take
+  hundreds of GB.
 
 ## 8. What "our own" means (originality rules)
 
@@ -269,7 +318,8 @@ currently warns about.
 | Self-play data collapses into narrow styles | randomized openings, own book diversity, mixing generations |
 | wasm speed gap erases native gains | browser nps in CI; net sizes chosen for simd128 |
 | Overfitting to STC | LTC confirmation for search changes |
-| Compute runs out | phases are useful on their own; the app keeps Stockfish until Lola surpasses it |
+| GPU calls slow the hybrid's search | asynchronous batched requests; the search never waits on the GPU |
+| Compute runs out | volunteer workers; every phase is useful on its own; the app keeps Stockfish until Lola surpasses it |
 
 ## 10. First concrete steps
 
